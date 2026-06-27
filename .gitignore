@@ -1,0 +1,22 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Native generati da `flutter create`
+android/.gradle/
+android/local.properties
+ios/Pods/
+ios/.symlinks/
+
+# OS
+.DS_Store
+Thumbs.db

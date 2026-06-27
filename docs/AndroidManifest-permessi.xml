@@ -1,0 +1,28 @@
+<!--
+  Permessi da inserire nel file:
+    android/app/src/main/AndroidManifest.xml
+  (generato da `flutter create .`)
+
+  1) La riga <uses-permission ... CAMERA> va PRIMA del tag <application>.
+  2) L'attributo android:usesCleartextTraffic="true" va DENTRO il tag <application>.
+
+  Esempio di come deve risultare il file (parti rilevanti):
+-->
+
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- (1) Fotocamera per scattare le foto e leggere i QR -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- INTERNET di norma è già aggiunto da Flutter; serve al sync sul WiFi locale -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:label="Cantina Vini"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">   <!-- (2) consente HTTP sulla rete locale -->
+
+        <!-- ...il resto del file generato da Flutter resta invariato... -->
+
+    </application>
+</manifest>

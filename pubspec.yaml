@@ -1,0 +1,47 @@
+name: cantina_vini
+description: "Magazzino vini per ristoranti - offline-first, P2P sullo stesso WiFi."
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Database locale (offline-first)
+  sqflite: ^2.3.3
+  path: ^1.9.0
+  path_provider: ^2.1.4
+
+  # Identificatori e date
+  uuid: ^4.5.1
+  intl: ^0.19.0
+
+  # Foto
+  image_picker: ^1.1.2
+
+  # OCR etichetta (opzionale, leggibile dalla foto)
+  google_mlkit_text_recognition: ^0.13.1
+
+  # Backup / ripristino su file
+  share_plus: ^10.0.2
+  file_picker: ^8.1.2
+  archive: ^3.6.1
+
+  # Sync P2P sullo stesso WiFi
+  shelf: ^1.4.1
+  shelf_router: ^1.1.4
+  http: ^1.2.2
+  network_info_plus: ^6.1.1
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^5.2.3
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
