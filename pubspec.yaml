@@ -47,5 +47,25 @@ dependencies:
 dev_dependencies:
   flutter_lints: ^4.0.0
 
+  # Genera l'icona dell'app (launcher) da assets/Logo_cantina_vini.png.
+  flutter_launcher_icons: ^0.14.1
+
 flutter:
   uses-material-design: true
+  assets:
+    - assets/Logo_cantina_vini.png
+
+# Configurazione dell'icona dell'app. Per generarla:
+#   flutter pub get
+#   dart run flutter_launcher_icons
+# (da rifare se cambi il logo). Richiede che esistano le cartelle android/ios,
+# quindi va lanciato DOPO "flutter create .".
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/Logo_cantina_vini.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true
+  # Icona adattiva Android (sfondo + logo in primo piano):
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/Logo_cantina_vini.png"
