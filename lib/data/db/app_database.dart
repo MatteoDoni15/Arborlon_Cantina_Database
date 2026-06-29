@@ -24,12 +24,22 @@ class AppDatabase {
     final path = p.join(dir.path, 'cantina_vini.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
+  }
+
+  /// Migrazioni del DB locale. Ogni "if" porta avanti chi ha una versione
+  /// precedente, senza perdere i dati gia' presenti.
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // v2: seconda foto dell'etichetta (retro).
+      await db.execute('ALTER TABLE wines ADD COLUMN photo_path_back TEXT');
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -46,7 +56,8 @@ class AppDatabase {
         price_buy   REAL NOT NULL DEFAULT 0,
         price_sell  REAL NOT NULL DEFAULT 0,
         notes       TEXT NOT NULL DEFAULT '',
-        photo_path  TEXT,
+        photo_path      TEXT,
+        photo_path_back TEXT,
         updated_at  INTEGER NOT NULL,
         deleted     INTEGER NOT NULL DEFAULT 0
       )

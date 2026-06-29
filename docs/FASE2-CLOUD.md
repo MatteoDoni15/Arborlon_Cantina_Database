@@ -1,6 +1,16 @@
-# ☁️ Fase 2 — Cloud e abbonamento (futura)
+# ☁️ Fase 2 — Cloud e abbonamento
 
-Questo documento descrive come si aggancerà il cloud **sopra** la Fase 1, senza
+> **Stato:** primo innesto implementato. Per attivarlo (progetto Supabase +
+> chiavi) segui la guida **[CLOUD-SETUP.md](CLOUD-SETUP.md)**.
+>
+> File aggiunti, tutti **accanto** al P2P senza modificarlo:
+> - `lib/sync/cloud_config.dart` — chiavi Supabase (via `--dart-define`)
+> - `lib/sync/cloud_sync_service.dart` — push/pull dello stesso `SyncPayload`
+> - `lib/services/app_settings.dart` — flag premium + modalità sync + codice ristorante
+> - `lib/ui/widgets/cloud_settings_card.dart` — sezione "Cloud (Premium)" nelle Impostazioni
+> - `supabase/schema.sql` — tabelle, RLS e bucket foto
+
+Questo documento descrive come si aggancia il cloud **sopra** la Fase 1, senza
 buttare via niente di quello già fatto.
 
 ## Perché si innesta senza riscrivere

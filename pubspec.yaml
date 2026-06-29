@@ -38,6 +38,10 @@ dependencies:
   qr_flutter: ^4.1.0
   mobile_scanner: ^5.2.3
 
+  # Cloud (Fase 2, premium): sync a distanza via Supabase.
+  # È un trasporto AGGIUNTIVO: il P2P locale resta sempre attivo.
+  supabase_flutter: ^2.8.0
+
   cupertino_icons: ^1.0.8
 
 dev_dependencies:

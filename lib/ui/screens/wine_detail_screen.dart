@@ -80,9 +80,7 @@ class _WineDetailScreenState extends State<WineDetailScreen> {
       ),
       body: ListView(
         children: [
-          if (wine.photoPath != null && File(wine.photoPath!).existsSync())
-            Image.file(File(wine.photoPath!),
-                height: 220, width: double.infinity, fit: BoxFit.cover),
+          _photos(wine),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -139,6 +137,57 @@ class _WineDetailScreenState extends State<WineDetailScreen> {
             ..._movements.map(_movementTile),
           const SizedBox(height: 24),
         ],
+      ),
+    );
+  }
+
+  /// Mostra le foto disponibili (fronte e/o retro). Se ce ne sono due le
+  /// affianca; toccandole si aprono a schermo intero (utile per leggere il
+  /// retro, dove il testo è piccolo).
+  Widget _photos(Wine w) {
+    final paths = [w.photoPath, w.photoPathBack]
+        .where((p) => p != null && File(p!).existsSync())
+        .cast<String>()
+        .toList();
+    if (paths.isEmpty) return const SizedBox.shrink();
+    if (paths.length == 1) {
+      return GestureDetector(
+        onTap: () => _openPhoto(paths.first),
+        child: Image.file(File(paths.first),
+            height: 220, width: double.infinity, fit: BoxFit.cover),
+      );
+    }
+    return Row(
+      children: [
+        for (final path in paths)
+          Expanded(
+            child: GestureDetector(
+              onTap: () => _openPhoto(path),
+              child: Image.file(File(path),
+                  height: 220, fit: BoxFit.cover),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _openPhoto(String path) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        insetPadding: const EdgeInsets.all(8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            InteractiveViewer(
+              child: Image.file(File(path)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Chiudi'),
+            ),
+          ],
+        ),
       ),
     );
   }

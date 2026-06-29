@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
@@ -5,7 +7,6 @@ import '../../data/models/wine.dart';
 import '../../data/repositories/inventory_repository.dart';
 import '../../services/ocr_service.dart';
 import '../../services/photo_service.dart';
-import '../widgets/photo_thumb.dart';
 
 const _wineTypes = [
   'Rosso',
@@ -40,7 +41,8 @@ class _WineFormScreenState extends State<WineFormScreen> {
   late final TextEditingController _notes;
 
   String _type = 'Rosso';
-  String? _photoPath;
+  String? _photoPath; // etichetta fronte
+  String? _photoPathBack; // etichetta retro
   bool _ocrRunning = false;
 
   @override
@@ -63,6 +65,7 @@ class _WineFormScreenState extends State<WineFormScreen> {
       _type = w.type;
     }
     _photoPath = w?.photoPath;
+    _photoPathBack = w?.photoPathBack;
   }
 
   @override
@@ -209,39 +212,25 @@ class _WineFormScreenState extends State<WineFormScreen> {
   Widget _photoSection() {
     return Column(
       children: [
-        GestureDetector(
-          onTap: _photoMenu,
-          child: _photoPath == null
-              ? Container(
-                  height: 160,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: const Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.add_a_photo, size: 40),
-                        SizedBox(height: 8),
-                        Text('Foto etichetta (tocca per scattare)'),
-                      ],
-                    ),
-                  ),
-                )
-              : Stack(
-                  alignment: Alignment.topRight,
-                  children: [
-                    PhotoThumb(path: _photoPath, size: 160, radius: 16),
-                    IconButton(
-                      style: IconButton.styleFrom(
-                          backgroundColor: Colors.black54),
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: () => setState(() => _photoPath = null),
-                    ),
-                  ],
-                ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _photoSlot(
+                label: 'Etichetta fronte',
+                path: _photoPath,
+                onPick: (p) => setState(() => _photoPath = p),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _photoSlot(
+                label: 'Etichetta retro',
+                path: _photoPathBack,
+                onPick: (p) => setState(() => _photoPathBack = p),
+              ),
+            ),
+          ],
         ),
         if (_photoPath != null) ...[
           const SizedBox(height: 8),
@@ -253,14 +242,72 @@ class _WineFormScreenState extends State<WineFormScreen> {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.auto_fix_high),
-            label: const Text('Leggi etichetta (riempi automaticamente)'),
+            label: const Text('Leggi etichetta fronte (riempi automaticamente)'),
           ),
         ],
       ],
     );
   }
 
-  Future<void> _photoMenu() async {
+  /// Un riquadro foto (fronte o retro): mostra l'immagine o un segnaposto, con
+  /// la X per rimuoverla. [onPick] riceve il nuovo percorso (o null se rimossa).
+  Widget _photoSlot({
+    required String label,
+    required String? path,
+    required ValueChanged<String?> onPick,
+  }) {
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: () => _pickPhoto(onPick),
+          child: path == null
+              ? Container(
+                  height: 140,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.add_a_photo, size: 32),
+                        const SizedBox(height: 6),
+                        Text(label,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                )
+              : Stack(
+                  alignment: Alignment.topRight,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.file(File(path),
+                          height: 140,
+                          width: double.infinity,
+                          fit: BoxFit.cover),
+                    ),
+                    IconButton(
+                      style:
+                          IconButton.styleFrom(backgroundColor: Colors.black54),
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () => onPick(null),
+                    ),
+                  ],
+                ),
+        ),
+        const SizedBox(height: 4),
+        Text(label,
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+      ],
+    );
+  }
+
+  Future<void> _pickPhoto(ValueChanged<String?> onPick) async {
     final source = await showModalBottomSheet<String>(
       context: context,
       builder: (_) => SafeArea(
@@ -287,7 +334,7 @@ class _WineFormScreenState extends State<WineFormScreen> {
     } else if (source == 'gallery') {
       path = await PhotoService.instance.pickFromGallery();
     }
-    if (path != null) setState(() => _photoPath = path);
+    if (path != null) onPick(path);
   }
 
   Future<void> _runOcr() async {
@@ -332,6 +379,7 @@ class _WineFormScreenState extends State<WineFormScreen> {
       priceSell: _parsePrice(_priceSell.text),
       notes: _notes.text.trim(),
       photoPath: _photoPath,
+      photoPathBack: _photoPathBack,
       updatedAt: DateTime.now().millisecondsSinceEpoch,
     );
     await _repo.upsertWine(wine);

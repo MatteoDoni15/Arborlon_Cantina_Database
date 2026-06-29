@@ -16,7 +16,8 @@ class Wine {
   final double priceBuy; // prezzo di acquisto medio
   final double priceSell; // prezzo di vendita
   final String notes;
-  final String? photoPath; // percorso locale della foto dell'etichetta
+  final String? photoPath; // foto etichetta FRONTE (percorso locale)
+  final String? photoPathBack; // foto etichetta RETRO (percorso locale)
 
   // Campi di sincronizzazione
   final int updatedAt; // millisecondi epoch dell'ultima modifica
@@ -35,6 +36,7 @@ class Wine {
     this.priceSell = 0,
     this.notes = '',
     this.photoPath,
+    this.photoPathBack,
     required this.updatedAt,
     this.deleted = false,
   });
@@ -52,6 +54,8 @@ class Wine {
     String? notes,
     String? photoPath,
     bool clearPhoto = false,
+    String? photoPathBack,
+    bool clearPhotoBack = false,
     int? updatedAt,
     bool? deleted,
   }) {
@@ -68,6 +72,8 @@ class Wine {
       priceSell: priceSell ?? this.priceSell,
       notes: notes ?? this.notes,
       photoPath: clearPhoto ? null : (photoPath ?? this.photoPath),
+      photoPathBack:
+          clearPhotoBack ? null : (photoPathBack ?? this.photoPathBack),
       updatedAt: updatedAt ?? this.updatedAt,
       deleted: deleted ?? this.deleted,
     );
@@ -86,6 +92,7 @@ class Wine {
         'price_sell': priceSell,
         'notes': notes,
         'photo_path': photoPath,
+        'photo_path_back': photoPathBack,
         'updated_at': updatedAt,
         'deleted': deleted ? 1 : 0,
       };
@@ -103,6 +110,7 @@ class Wine {
         priceSell: (m['price_sell'] as num?)?.toDouble() ?? 0,
         notes: (m['notes'] ?? '') as String,
         photoPath: m['photo_path'] as String?,
+        photoPathBack: m['photo_path_back'] as String?,
         updatedAt: (m['updated_at'] as num?)?.toInt() ?? 0,
         deleted: (m['deleted'] as num?)?.toInt() == 1,
       );
@@ -112,8 +120,10 @@ class Wine {
   Map<String, dynamic> toSyncJson() => {
         ...toMap(),
         // sul filesystem il percorso e' assoluto e diverso su ogni telefono:
-        // esportiamo solo il nome del file foto.
+        // esportiamo solo il nome del file foto (fronte e retro).
         'photo_path': photoPath == null ? null : _basename(photoPath!),
+        'photo_path_back':
+            photoPathBack == null ? null : _basename(photoPathBack!),
       };
 
   static String _basename(String p) =>

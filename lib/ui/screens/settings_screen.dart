@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/backup_service.dart';
 import '../../services/device_service.dart';
+import '../widgets/cloud_settings_card.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -85,6 +86,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: const Icon(Icons.download),
             label: const Text('Importa backup'),
           ),
+          const Divider(height: 40),
+
+          const CloudSettingsCard(),
           const Divider(height: 40),
 
           const Card(

@@ -23,6 +23,8 @@ class SyncPayload {
     for (final w in wines) {
       final n = _basename(w.photoPath);
       if (n != null) names.add(n);
+      final b = _basename(w.photoPathBack);
+      if (b != null) names.add(b);
     }
     for (final m in movements) {
       final n = _basename(m.photoPath);
@@ -62,12 +64,16 @@ class SyncPayload {
   /// nel DB, i record puntino alle foto presenti su QUESTO telefono.
   Future<SyncPayload> withResolvedPhotoPaths(
       Future<String> Function(String fileName) resolve) async {
-    final w = [
-      for (final wine in wines)
-        wine.photoPath == null
-            ? wine
-            : wine.copyWith(photoPath: await resolve(wine.photoPath!)),
-    ];
+    final w = <Wine>[];
+    for (var wine in wines) {
+      if (wine.photoPath != null) {
+        wine = wine.copyWith(photoPath: await resolve(wine.photoPath!));
+      }
+      if (wine.photoPathBack != null) {
+        wine = wine.copyWith(photoPathBack: await resolve(wine.photoPathBack!));
+      }
+      w.add(wine);
+    }
     final m = [
       for (final mov in movements)
         mov.photoPath == null
