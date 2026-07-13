@@ -26,6 +26,34 @@ In **Project Settings → API** copia:
 - **Project URL** (es. `https://xxxx.supabase.co`)
 - **anon public key** (una stringa lunga che inizia con `eyJ...`)
 
+## 3b. (Opzionale) Abilita il login con Google
+
+Il login email/password funziona subito, senza configurare nulla. Per offrire
+anche **"Continua con Google"**:
+
+1. Vai su <https://console.cloud.google.com> → crea (o scegli) un progetto →
+   **APIs & Services → OAuth consent screen** e completa la schermata di
+   consenso (tipo *External*, bastano nome app e email).
+2. **APIs & Services → Credentials → Create credentials → OAuth client ID**:
+   - Tipo: **Web application** (sì, "Web", anche se l'app è mobile: il flusso
+     passa dal browser e da Supabase).
+   - **Authorized redirect URIs**: `https://<TUO-PROGETTO>.supabase.co/auth/v1/callback`
+   - Salva e copia **Client ID** e **Client secret**.
+3. In Supabase: **Authentication → Providers → Google** → attiva e incolla
+   Client ID e Client secret.
+4. Sempre in Supabase: **Authentication → URL Configuration → Redirect URLs** →
+   aggiungi:
+   ```
+   io.supabase.cantinavini://login-callback/
+   ```
+   (è il deep link con cui il browser riapre l'app: vedi
+   `CloudConfig.oauthRedirectUri`).
+
+Come funziona nell'app: il bottone **Continua con Google** apre il browser,
+l'utente sceglie l'account Google e il telefono torna automaticamente
+nell'app già autenticato. Funziona su Android e iOS (il deep link è registrato
+nei rispettivi manifest); su desktop usa il login email.
+
 ## 4. Avvia l'app con le chiavi
 
 Le chiavi NON vanno nel codice/repo: si passano al build.
@@ -48,12 +76,15 @@ disabilitata e mostra un avviso — tutto il resto funziona comunque.
 1. Attiva l'**abbonamento premium** (per ora è un flag manuale; in futuro sarà
    un acquisto in-app).
 2. Scegli la modalità **Cloud**.
-3. **Registrati / Accedi** con email e password.
+3. **Registrati / Accedi** con email e password, oppure tocca **Continua con
+   Google** (se hai fatto il passo 3b).
 4. Crea o entra in un ristorante:
    - **Il primo** (es. il titolare): inserisce il nome e tocca **Crea
-     ristorante**. L'app mostra un **codice invito** (es. `A1B2C3`).
-   - **I colleghi**: ognuno si registra/accede, poi tocca **Entra con codice
-     invito** e inserisce quel codice.
+     ristorante**. L'app mostra un **codice invito** (es. `A1B2C3`) e, con
+     l'icona QR accanto al codice, il **QR invito** da far inquadrare.
+   - **I colleghi**: ognuno si registra/accede, poi tocca **Inquadra il QR
+     invito di un collega** (o, in alternativa, **Entra con codice invito**
+     scrivendo il codice a mano).
 5. **Sincronizza col cloud ora**.
 
 Tutti i membri dello stesso ristorante vedono gli stessi dati, da qualsiasi

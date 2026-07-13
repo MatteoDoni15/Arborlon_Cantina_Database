@@ -49,6 +49,19 @@ class CloudSyncService {
     await _sb.auth.signUp(email: email.trim(), password: password);
   }
 
+  /// Login con Google: apre il browser sulla pagina OAuth di Google e torna
+  /// nell'app tramite deep link ([CloudConfig.oauthRedirectUri]). Il metodo
+  /// ritorna appena il browser è aperto: l'esito vero arriva in modo asincrono
+  /// su [authChanges] quando l'app viene riaperta dal deep link.
+  Future<void> signInWithGoogle() async {
+    _ensureAvailable();
+    await _sb.auth.signInWithOAuth(
+      OAuthProvider.google,
+      redirectTo: CloudConfig.oauthRedirectUri,
+      authScreenLaunchMode: LaunchMode.externalApplication,
+    );
+  }
+
   Future<void> signOut() async {
     if (isAvailable) await _sb.auth.signOut();
   }

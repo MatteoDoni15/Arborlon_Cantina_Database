@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/app_settings.dart';
 import '../../sync/cloud_sync_service.dart';
+import 'invite_qr.dart';
 
 /// Sezione "Cloud (Premium)" delle impostazioni.
 ///
@@ -25,9 +28,23 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
   final _newRestaurant = TextEditingController();
   final _joinCode = TextEditingController();
   bool _busy = false;
+  StreamSubscription<dynamic>? _authSub;
+
+  @override
+  void initState() {
+    super.initState();
+    // Il login Google si conclude FUORI dall'app (browser + deep link):
+    // ridisegna la card quando lo stato di autenticazione cambia.
+    if (_cloud.isAvailable) {
+      _authSub = _cloud.authChanges.listen((_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
 
   @override
   void dispose() {
+    _authSub?.cancel();
     _email.dispose();
     _password.dispose();
     _newRestaurant.dispose();
@@ -185,6 +202,25 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            const Expanded(child: Divider()),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text('oppure',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+            ),
+            const Expanded(child: Divider()),
+          ],
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(44)),
+          onPressed: _busy ? null : _googleSignIn,
+          icon: const Icon(Icons.g_mobiledata, size: 30),
+          label: const Text('Continua con Google'),
+        ),
       ],
     );
   }
@@ -216,10 +252,16 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
 
         const Divider(height: 28),
 
-        // Entra in un ristorante con codice invito.
+        // Entra in un ristorante: QR di un collega oppure codice scritto.
         const Text('Oppure entra in un ristorante esistente',
             style: TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
+        FilledButton.tonalIcon(
+          onPressed: _busy ? null : _scanInvite,
+          icon: const Icon(Icons.qr_code_scanner),
+          label: const Text('Inquadra il QR invito di un collega'),
+        ),
+        const SizedBox(height: 12),
         TextField(
           controller: _joinCode,
           textCapitalization: TextCapitalization.characters,
@@ -288,6 +330,15 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
                             ClipboardData(text: _settings.inviteCode));
                         _snack('Codice copiato');
                       },
+                    ),
+                    IconButton(
+                      tooltip: 'Mostra QR invito',
+                      icon: const Icon(Icons.qr_code_2),
+                      onPressed: () => showInviteQrDialog(
+                        context,
+                        restaurantName: _settings.restaurantName,
+                        inviteCode: _settings.inviteCode,
+                      ),
                     ),
                   ],
                 ),
@@ -361,6 +412,25 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
         await _cloud.signIn(_email.text, _password.text);
         _snack('Accesso eseguito.');
       }
+    });
+  }
+
+  Future<void> _googleSignIn() async {
+    await _run(() async {
+      await _cloud.signInWithGoogle();
+      _snack('Completa l\'accesso nel browser: al termine tornerai nell\'app.');
+    });
+  }
+
+  Future<void> _scanInvite() async {
+    final code = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const InviteScannerScreen()),
+    );
+    if (code == null || !mounted) return;
+    await _run(() async {
+      final info = await _cloud.joinRestaurant(code);
+      _snack('Sei entrato in "${info.name}".');
     });
   }
 
