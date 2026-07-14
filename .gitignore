@@ -17,6 +17,10 @@ android/local.properties
 ios/Pods/
 ios/.symlinks/
 
+# Chiavi Supabase per run/build locali (vedi docs/CLOUD-SETUP.md §4).
+# NON vanno nel repository.
+env.json
+
 # OS
 .DS_Store
 Thumbs.db

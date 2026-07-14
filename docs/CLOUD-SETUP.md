@@ -56,7 +56,27 @@ nei rispettivi manifest); su desktop usa il login email.
 
 ## 4. Avvia l'app con le chiavi
 
-Le chiavi NON vanno nel codice/repo: si passano al build.
+Le chiavi NON vanno nel codice/repo: si passano al build. Il modo comodo è il
+file `env.json` nella radice del progetto (è già nel `.gitignore`):
+
+```json
+{
+  "SUPABASE_URL": "https://xxxx.supabase.co",
+  "SUPABASE_ANON_KEY": "eyJhbGci..."
+}
+```
+
+Poi, sia per provare sia per la build di rilascio:
+
+```powershell
+flutter run --dart-define-from-file=env.json
+flutter build apk --dart-define-from-file=env.json
+```
+
+Le chiavi vengono "cotte" dentro l'APK al momento della build: l'app
+installata funziona da sola, senza bisogno di file esterni.
+
+In alternativa si possono passare le singole chiavi a mano:
 
 ```powershell
 flutter run `
@@ -64,7 +84,10 @@ flutter run `
   --dart-define=SUPABASE_ANON_KEY=eyJhbGci...
 ```
 
-(Per la build di rilascio: stessi `--dart-define` su `flutter build apk`.)
+> Nota sicurezza: la **anon key** è pensata per stare nell'app pubblica — i
+> dati sono protetti dalle policy RLS, non dalla segretezza della chiave. Il
+> **Client Secret di Google** invece NON va mai nell'app né nel repo: vive solo
+> nella dashboard Supabase (Providers → Google).
 
 Se le chiavi mancano, la sezione **Cloud (Premium)** nelle Impostazioni resta
 disabilitata e mostra un avviso — tutto il resto funziona comunque.
@@ -85,7 +108,10 @@ disabilitata e mostra un avviso — tutto il resto funziona comunque.
    - **I colleghi**: ognuno si registra/accede, poi tocca **Inquadra il QR
      invito di un collega** (o, in alternativa, **Entra con codice invito**
      scrivendo il codice a mano).
-5. **Sincronizza col cloud ora**.
+5. **Attiva il piano Cloud**: i ristoranti nuovi partono dal piano Gratuito e
+   il server blocca la loro sync. Tocca **Richiedi attivazione Cloud** e
+   attendi l'approvazione del gestore (vedi la sezione "Abbonamento" in fondo).
+6. **Sincronizza col cloud ora**.
 
 Tutti i membri dello stesso ristorante vedono gli stessi dati, da qualsiasi
 rete. La sicurezza (RLS) garantisce che un ristorante non veda i dati di un
@@ -112,16 +138,31 @@ L'abbonamento è **per ristorante**: la tabella `restaurants` ha una colonna
 locale) e `plan_renews_at` (scadenza). Gli utenti gratis non hanno alcun record:
 il P2P è locale e non tocca Supabase.
 
-- **Stato attuale (solo tracciamento):** l'app legge il piano e lo mostra
-  (badge "Gratuito" / "Cloud"), ma **non blocca** ancora la sync.
-- **Attivare il cloud per un ristorante (per i test):** dalla dashboard Supabase
-  → Table Editor → `restaurants` → metti `plan` = `cloud` sulla riga del tuo
-  ristorante. Oppure via SQL:
-  ```sql
-  update restaurants set plan = 'cloud' where invite_code = 'A1B2C3';
-  ```
-  Alla sync successiva l'app rileggerà il piano e il badge diventerà "Cloud".
-- **In futuro (blocco reale):** quando colleghi i pagamenti, aggiungi
-  `and has_cloud(restaurant_id)` alle policy RLS di `wines`/`movements` per far
-  rifiutare al server la sync dei ristoranti senza abbonamento. La funzione
-  `has_cloud()` è già pronta nello schema.
+**Il blocco è reale**: le policy RLS di `wines`/`movements`/foto richiedono il
+piano cloud attivo, quindi il server **rifiuta la sync** dei ristoranti
+gratuiti. Il badge "Gratuito"/"Cloud" nell'app riflette questo stato. La
+colonna `plan` non è modificabile dall'app (privilegi di colonna): la cambia
+solo il gestore dalla dashboard.
+
+Flusso di attivazione (finché non ci sono i pagamenti in-app):
+
+1. Nell'app, il ristorante gratuito vede il pannello "Cloud non attivo" e
+   tocca **Richiedi attivazione Cloud** → compare una riga `pending` nella
+   tabella `cloud_requests` (una sola richiesta in attesa per ristorante).
+2. Tu (gestore) controlli le richieste: Table Editor → `cloud_requests`,
+   oppure:
+   ```sql
+   select cr.id, cr.email, r.name, cr.created_at
+   from cloud_requests cr join restaurants r on r.id = cr.restaurant_id
+   where cr.status = 'pending';
+   ```
+3. Approvi dal SQL Editor (attiva `plan='cloud'` e marca la richiesta):
+   ```sql
+   select approve_cloud_request('<id-della-richiesta>');
+   ```
+   Per rifiutare: `update cloud_requests set status = 'rejected' where id = '...';`
+4. L'utente tocca **"Ho fatto richiesta: controlla se è attivo"**: il badge
+   diventa "Cloud" e la sincronizzazione si sblocca.
+
+Quando colleghi i pagamenti (Google Play Billing / Stripe), il webhook prenderà
+il posto dell'approvazione manuale scrivendo `plan` e `plan_renews_at`.

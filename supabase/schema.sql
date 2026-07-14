@@ -54,9 +54,8 @@ as $$
 $$;
 
 -- "Questo ristorante ha il cloud attivo?" (piano 'cloud' non scaduto).
--- Per ora usata solo per informare l'app; quando si attiverà il blocco lato
--- server basterà aggiungere "and has_cloud(restaurant_id)" alle policy di
--- wines/movements.
+-- Usata nelle policy di wines/movements/foto: il server RIFIUTA la sync dei
+-- ristoranti senza piano cloud (vedi anche cloud_requests più sotto).
 create or replace function public.has_cloud(p_restaurant uuid)
 returns boolean
 language sql
@@ -117,24 +116,39 @@ alter table restaurant_members enable row level security;
 alter table wines              enable row level security;
 alter table movements          enable row level security;
 
+-- I membri vedono e rinominano il proprio ristorante. Niente insert (ci pensa
+-- la RPC create_restaurant) né delete dal client. La colonna `plan` è protetta
+-- dai privilegi di colonna qui sotto: la cambia solo il gestore (dashboard).
 drop policy if exists restaurants_rw on restaurants;
-create policy restaurants_rw on restaurants
-  for all to authenticated
+drop policy if exists restaurants_select on restaurants;
+create policy restaurants_select on restaurants
+  for select to authenticated using (is_member(id));
+drop policy if exists restaurants_update on restaurants;
+create policy restaurants_update on restaurants
+  for update to authenticated
   using (is_member(id)) with check (is_member(id));
+
+-- Privilegi di colonna: dall'app i membri possono aggiornare SOLO il nome.
+revoke update on restaurants from authenticated;
+grant update (name) on restaurants to authenticated;
 
 drop policy if exists members_read on restaurant_members;
 create policy members_read on restaurant_members
   for select to authenticated using (is_member(restaurant_id));
 
+-- La sync dei dati richiede membership + piano cloud attivo: i ristoranti
+-- gratuiti (solo P2P) vengono rifiutati direttamente dal server.
 drop policy if exists wines_rw on wines;
 create policy wines_rw on wines
   for all to authenticated
-  using (is_member(restaurant_id)) with check (is_member(restaurant_id));
+  using (is_member(restaurant_id) and has_cloud(restaurant_id))
+  with check (is_member(restaurant_id) and has_cloud(restaurant_id));
 
 drop policy if exists movements_rw on movements;
 create policy movements_rw on movements
   for all to authenticated
-  using (is_member(restaurant_id)) with check (is_member(restaurant_id));
+  using (is_member(restaurant_id) and has_cloud(restaurant_id))
+  with check (is_member(restaurant_id) and has_cloud(restaurant_id));
 
 -- =====================================================================
 -- FUNZIONI per creare/entrare in un ristorante (chiamate dall'app)
@@ -179,6 +193,61 @@ end;
 $$;
 
 -- =====================================================================
+-- RICHIESTE DI ATTIVAZIONE CLOUD (finché non ci sono i pagamenti in-app)
+-- =====================================================================
+-- L'utente tocca "Richiedi attivazione Cloud" nell'app → qui compare una riga
+-- 'pending'. Il gestore la vede (Table Editor → cloud_requests) e la approva
+-- dal SQL Editor con:
+--   select approve_cloud_request('<id-della-richiesta>');
+
+create table if not exists cloud_requests (
+  id            uuid primary key default gen_random_uuid(),
+  restaurant_id uuid not null references restaurants(id) on delete cascade,
+  user_id       uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  email         text not null default '',
+  status        text not null default 'pending',  -- 'pending'|'approved'|'rejected'
+  created_at    timestamptz not null default now()
+);
+
+-- Al massimo UNA richiesta in attesa per ristorante.
+create unique index if not exists idx_cloud_requests_pending
+  on cloud_requests (restaurant_id) where status = 'pending';
+
+alter table cloud_requests enable row level security;
+
+-- I membri creano una richiesta per il PROPRIO ristorante e ne vedono lo
+-- stato. Nessuna policy di update/delete: lo stato lo cambia solo il gestore
+-- dalla dashboard, mai l'app.
+drop policy if exists cloud_requests_insert on cloud_requests;
+create policy cloud_requests_insert on cloud_requests
+  for insert to authenticated
+  with check (user_id = auth.uid() and is_member(restaurant_id));
+
+drop policy if exists cloud_requests_select on cloud_requests;
+create policy cloud_requests_select on cloud_requests
+  for select to authenticated using (is_member(restaurant_id));
+
+-- Approva una richiesta: attiva il piano cloud del ristorante e marca la
+-- riga. Si usa SOLO dal SQL Editor della dashboard: l'execute è revocato
+-- agli utenti dell'app.
+create or replace function public.approve_cloud_request(p_request uuid)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+declare req cloud_requests;
+begin
+  select * into req from cloud_requests where id = p_request;
+  if req.id is null then
+    raise exception 'Richiesta non trovata';
+  end if;
+  update restaurants set plan = 'cloud' where id = req.restaurant_id;
+  update cloud_requests set status = 'approved' where id = p_request;
+end;
+$$;
+revoke execute on function public.approve_cloud_request(uuid)
+  from public, anon, authenticated;
+
+-- =====================================================================
 -- STORAGE: bucket foto, separato per ristorante (path = <restaurant_id>/file)
 -- =====================================================================
 insert into storage.buckets (id, name, public)
@@ -191,8 +260,10 @@ create policy photos_rw on storage.objects
   using (
     bucket_id = 'photos'
     and is_member( ((storage.foldername(name))[1])::uuid )
+    and has_cloud( ((storage.foldername(name))[1])::uuid )
   )
   with check (
     bucket_id = 'photos'
     and is_member( ((storage.foldername(name))[1])::uuid )
+    and has_cloud( ((storage.foldername(name))[1])::uuid )
   );

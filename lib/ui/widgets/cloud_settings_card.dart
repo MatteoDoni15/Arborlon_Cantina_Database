@@ -346,21 +346,16 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
             ),
           ),
         ),
-        if (!_settings.restaurantHasCloud) ...[
-          const SizedBox(height: 8),
-          Text(
-            'Questo ristorante è sul piano Gratuito (P2P). Il cloud qui è in '
-            'modalità prova; l\'abbonamento si attiverà coi pagamenti.',
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-          ),
-        ],
         const SizedBox(height: 12),
 
-        FilledButton.icon(
-          onPressed: _busy ? null : _syncNow,
-          icon: const Icon(Icons.cloud_sync),
-          label: const Text('Sincronizza col cloud ora'),
-        ),
+        if (!_settings.restaurantHasCloud)
+          _cloudLocked()
+        else
+          FilledButton.icon(
+            onPressed: _busy ? null : _syncNow,
+            icon: const Icon(Icons.cloud_sync),
+            label: const Text('Sincronizza col cloud ora'),
+          ),
         const SizedBox(height: 4),
         TextButton.icon(
           onPressed: _busy ? null : _leaveRestaurant,
@@ -368,6 +363,52 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
           label: const Text('Cambia ristorante'),
         ),
       ],
+    );
+  }
+
+  // Piano gratuito: la sync cloud è bloccata dal server finché il gestore non
+  // attiva il piano. Da qui parte la richiesta di attivazione; l'acquisto
+  // in-app prenderà il posto della richiesta quando ci saranno i pagamenti.
+  Widget _cloudLocked() {
+    return Card(
+      color: Colors.amber.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.lock_outline),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text('Cloud non attivo per questo ristorante',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'La sincronizzazione a distanza fa parte della versione Pro. '
+              'Invia la richiesta di attivazione: appena approvata, il badge '
+              'diventerà "Cloud" e potrai sincronizzare. (Acquisto in-app in '
+              'arrivo.)',
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: _busy ? null : _requestCloud,
+              icon: const Icon(Icons.send),
+              label: const Text('Richiedi attivazione Cloud'),
+            ),
+            TextButton.icon(
+              onPressed: _busy ? null : _checkPlan,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Ho fatto richiesta: controlla se è attivo'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -453,6 +494,24 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
   }
 
   Future<void> _leaveRestaurant() => _run(() => _settings.clearRestaurant());
+
+  Future<void> _requestCloud() async {
+    await _run(() async {
+      final sent = await _cloud.requestCloud();
+      _snack(sent
+          ? 'Richiesta inviata! Riceverai l\'attivazione a breve.'
+          : 'C\'è già una richiesta in attesa per questo ristorante.');
+    });
+  }
+
+  Future<void> _checkPlan() async {
+    await _run(() async {
+      final plan = await _cloud.refreshPlan();
+      _snack(plan == 'cloud'
+          ? 'Cloud attivo! Ora puoi sincronizzare. 🎉'
+          : 'Non ancora attivo: la richiesta è in lavorazione.');
+    });
+  }
 
   Future<void> _syncNow() async {
     setState(() => _busy = true);
