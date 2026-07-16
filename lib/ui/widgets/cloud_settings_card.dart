@@ -253,10 +253,13 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
           ),
         ),
         const SizedBox(height: 8),
-        FilledButton.icon(
-          onPressed: _busy ? null : _createRestaurant,
-          icon: const Icon(Icons.add_business),
-          label: const Text('Crea ristorante'),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: _busy ? null : _createRestaurant,
+            icon: const Icon(Icons.add_business),
+            label: const Text('Crea ristorante'),
+          ),
         ),
 
         const Divider(height: 28),
@@ -265,10 +268,13 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
         const Text('Oppure entra in un ristorante esistente',
             style: TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
-        FilledButton.tonalIcon(
-          onPressed: _busy ? null : _scanInvite,
-          icon: const Icon(Icons.qr_code_scanner),
-          label: const Text('Inquadra il QR invito di un collega'),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.tonalIcon(
+            onPressed: _busy ? null : _scanInvite,
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Inquadra il QR invito di un collega'),
+          ),
         ),
         const SizedBox(height: 12),
         TextField(
@@ -360,10 +366,13 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
         if (!_settings.restaurantHasCloud)
           _cloudLocked()
         else
-          FilledButton.icon(
-            onPressed: _busy ? null : _syncNow,
-            icon: const Icon(Icons.cloud_sync),
-            label: const Text('Sincronizza col cloud ora'),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _busy ? null : _syncNow,
+              icon: const Icon(Icons.cloud_sync),
+              label: const Text('Sincronizza col cloud ora'),
+            ),
           ),
         const SizedBox(height: 4),
         TextButton.icon(
@@ -405,10 +414,13 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
               style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
             ),
             const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: _busy ? null : _requestCloud,
-              icon: const Icon(Icons.send),
-              label: const Text('Richiedi attivazione Cloud'),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _busy ? null : _requestCloud,
+                icon: const Icon(Icons.send),
+                label: const Text('Richiedi attivazione Cloud'),
+              ),
             ),
             TextButton.icon(
               onPressed: _busy ? null : _checkPlan,
