@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/app_settings.dart';
 import '../../sync/cloud_sync_service.dart';
+import 'cloud_auth_dialogs.dart';
 
 /// Sezione "Cloud (Premium)" delle impostazioni.
 ///
@@ -185,6 +187,13 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
             ),
           ],
         ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: _busy ? null : _forgotPassword,
+            child: const Text('Password dimenticata?'),
+          ),
+        ),
       ],
     );
   }
@@ -342,6 +351,11 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
         const Icon(Icons.verified_user, color: Colors.green),
         const SizedBox(width: 8),
         Expanded(child: Text('Account: ${_cloud.currentEmail}')),
+        IconButton(
+          tooltip: 'Cambia password',
+          icon: const Icon(Icons.password),
+          onPressed: _busy ? null : _changePassword,
+        ),
         TextButton(
           onPressed: _busy ? null : _signOut,
           child: const Text('Esci'),
@@ -353,15 +367,60 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
   // -------------------------------------------------------------- azioni
 
   Future<void> _auth({required bool signUp}) async {
-    await _run(() async {
+    setState(() => _busy = true);
+    try {
       if (signUp) {
-        await _cloud.signUp(_email.text, _password.text);
-        _snack('Registrazione avviata: controlla la mail se richiesto.');
+        final needsConfirm =
+            await _cloud.signUp(_email.text, _password.text);
+        if (!mounted) return;
+        if (needsConfirm) {
+          // Supabase ha spedito il codice di conferma: chiedilo subito.
+          final ok = await showConfirmSignupDialog(context,
+              email: _email.text.trim());
+          _snack(ok == true
+              ? 'Email confermata: accesso eseguito.'
+              : 'Registrazione creata: conferma l\'email per accedere.');
+        } else {
+          _snack('Registrazione completata: accesso eseguito.');
+        }
       } else {
         await _cloud.signIn(_email.text, _password.text);
         _snack('Accesso eseguito.');
       }
-    });
+    } on AuthException catch (e) {
+      // Login con email mai confermata → proponi subito il codice.
+      final notConfirmed = e.code == 'email_not_confirmed' ||
+          e.message.toLowerCase().contains('not confirmed');
+      if (!signUp && notConfirmed && mounted) {
+        final ok = await showConfirmSignupDialog(context,
+            email: _email.text.trim());
+        _snack(ok == true
+            ? 'Email confermata: accesso eseguito.'
+            : 'Email non ancora confermata.');
+      } else {
+        _snack('Errore: ${e.message}');
+      }
+    } catch (e) {
+      _snack('Errore: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Flusso "password dimenticata": codice via email → nuova password.
+  /// A fine flusso l'utente risulta loggato (il codice vale come accesso).
+  Future<void> _forgotPassword() async {
+    final ok = await showPasswordResetDialog(context,
+        initialEmail: _email.text.trim());
+    if (ok == true && mounted) {
+      setState(() {}); // ora isSignedIn è true: mostra il pannello ristorante
+      _snack('Password aggiornata: accesso eseguito.');
+    }
+  }
+
+  Future<void> _changePassword() async {
+    final ok = await showChangePasswordDialog(context);
+    if (ok == true) _snack('Password cambiata.');
   }
 
   Future<void> _signOut() => _run(() => _cloud.signOut());

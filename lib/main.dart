@@ -23,7 +23,9 @@ Future<void> main() async {
   if (CloudConfig.isConfigured) {
     await Supabase.initialize(
       url: CloudConfig.supabaseUrl,
-      anonKey: CloudConfig.supabaseAnonKey,
+      // Accetta sia la nuova "Publishable key" (sb_publishable_...) sia la
+      // legacy "anon public" (eyJ...).
+      publishableKey: CloudConfig.supabaseAnonKey,
     );
   }
   runApp(const CantinaApp());

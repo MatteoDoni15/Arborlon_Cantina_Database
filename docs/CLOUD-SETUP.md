@@ -30,13 +30,23 @@ In **Project Settings → API** copia:
 
 Le chiavi NON vanno nel codice/repo: si passano al build.
 
+**Modo consigliato — file `.env`:** copia [`.env.example`](../.env.example) in
+`.env` (è già nel `.gitignore`), compila `SUPABASE_URL` e `SUPABASE_ANON_KEY`,
+poi:
+
+```powershell
+flutter run --dart-define-from-file=.env
+```
+
+**In alternativa, a mano:**
+
 ```powershell
 flutter run `
   --dart-define=SUPABASE_URL=https://xxxx.supabase.co `
   --dart-define=SUPABASE_ANON_KEY=eyJhbGci...
 ```
 
-(Per la build di rilascio: stessi `--dart-define` su `flutter build apk`.)
+(Per la build di rilascio: stesse opzioni su `flutter build apk`.)
 
 Se le chiavi mancano, la sezione **Cloud (Premium)** nelle Impostazioni resta
 disabilitata e mostra un avviso — tutto il resto funziona comunque.
@@ -59,6 +69,69 @@ disabilitata e mostra un avviso — tutto il resto funziona comunque.
 Tutti i membri dello stesso ristorante vedono gli stessi dati, da qualsiasi
 rete. La sicurezza (RLS) garantisce che un ristorante non veda i dati di un
 altro: ogni utente accede **solo** ai ristoranti di cui è membro.
+
+## 6. Email di autenticazione (SMTP + template)
+
+Le email di Auth (conferma registrazione, recupero password, avvisi di
+sicurezza) le manda Supabase. Il mittente di default di Supabase è solo per
+prova (limite ~2 email/ora): in produzione serve un **SMTP proprio**.
+
+### SMTP (già collegato: Mailtrap)
+
+Il progetto è collegato a **Mailtrap Email Sending** tramite l'integrazione
+ufficiale (Supabase → Authentication → Emails → **SMTP Settings**):
+
+- Host: `live.smtp.mailtrap.io`, porta `587`, utente `smtp@mailtrap.io`
+- Mittente: `noreply@arborloncantina.com` (dominio verificato su Mailtrap:
+  DKIM `rwmt1`/`rwmt2` + DMARC — controllabile in Mailtrap → Sending Domains)
+
+### Template col codice a 6 cifre (⚠️ passaggio obbligatorio)
+
+L'app **non usa i link** nelle email (su mobile servirebbero i deep link): usa
+**codici a 6 cifre** che l'utente ricopia nell'app. Perché il codice compaia,
+i template in Supabase → Authentication → Emails → **Templates** devono
+contenere `{{ .Token }}`. Da sistemare almeno questi due:
+
+- **Reset password** (usato da "Password dimenticata?"):
+
+  ```html
+  <h2>Recupero password — Arborlon Cantina</h2>
+  <p>Il tuo codice di recupero è: <strong style="font-size:24px">{{ .Token }}</strong></p>
+  <p>Inseriscilo nell'app entro un'ora. Se non hai richiesto tu il codice, ignora questa email.</p>
+  ```
+
+- **Confirm sign up** (usato alla registrazione):
+
+  ```html
+  <h2>Benvenuto in Arborlon Cantina!</h2>
+  <p>Il tuo codice di conferma è: <strong style="font-size:24px">{{ .Token }}</strong></p>
+  <p>Inseriscilo nell'app per attivare l'account.</p>
+  ```
+
+Se un template contiene solo `{{ .ConfirmationURL }}` (il default), l'utente
+riceve un link che non riporta all'app: il flusso col codice non funziona.
+
+### Flussi disponibili nell'app (Impostazioni → Cloud)
+
+- **Password dimenticata?** → email → codice → nuova password (e accesso).
+- **Registrati** → codice di conferma chiesto subito dopo (con "invia di nuovo").
+- Login con email non confermata → l'app propone da sola il codice.
+- **Cambia password** (icona 🔑 accanto all'account, da loggati).
+
+### Limiti e test
+
+- **Rate limit**: Supabase → Authentication → Rate Limits → "Emails sent".
+  Con SMTP custom il default è basso (es. 30/ora): alzalo se serve.
+- **Test rapido senza app** (spedisce una vera email di recupero):
+
+  ```powershell
+  curl.exe -s -X POST "https://XXXX.supabase.co/auth/v1/recover" `
+    -H "apikey: LA_TUA_ANON_KEY" -H "Content-Type: application/json" `
+    -d '{\"email\":\"tua-email@esempio.com\"}'
+  ```
+
+  Risposta `{}` = inviata. Se non arriva: Mailtrap → **Email Logs** mostra se
+  Supabase ha consegnato la mail a Mailtrap e cosa ne è stato.
 
 ## Note
 

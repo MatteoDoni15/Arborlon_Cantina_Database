@@ -17,6 +17,10 @@ android/local.properties
 ios/Pods/
 ios/.symlinks/
 
+# Chiavi locali (Supabase): copia .env.example in .env e compilalo.
+# Il .env NON va mai committato.
+.env
+
 # OS
 .DS_Store
 Thumbs.db
