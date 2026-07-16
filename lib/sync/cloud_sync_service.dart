@@ -53,6 +53,19 @@ class CloudSyncService {
     return res.session == null;
   }
 
+  /// Login con Google: apre il browser sulla pagina OAuth di Google e torna
+  /// nell'app tramite deep link ([CloudConfig.oauthRedirectUri]). Il metodo
+  /// ritorna appena il browser è aperto: l'esito vero arriva in modo asincrono
+  /// su [authChanges] quando l'app viene riaperta dal deep link.
+  Future<void> signInWithGoogle() async {
+    _ensureAvailable();
+    await _sb.auth.signInWithOAuth(
+      OAuthProvider.google,
+      redirectTo: CloudConfig.oauthRedirectUri,
+      authScreenLaunchMode: LaunchMode.externalApplication,
+    );
+  }
+
   Future<void> signOut() async {
     if (isAvailable) await _sb.auth.signOut();
   }
@@ -160,6 +173,36 @@ class CloudSyncService {
     return plan;
   }
 
+  // ------------------------------------------------------- ATTIVAZIONE CLOUD
+
+  /// Invia al gestore la richiesta di attivare il piano cloud per il
+  /// ristorante attivo. Ritorna false se c'è già una richiesta in attesa.
+  Future<bool> requestCloud() async {
+    _ensureSignedIn();
+    final rid = _settings.restaurantId;
+    if (rid.isEmpty) throw Exception('Crea o entra in un ristorante prima.');
+    if (await hasPendingCloudRequest()) return false;
+    await _sb.from('cloud_requests').insert({
+      'restaurant_id': rid,
+      'email': currentEmail ?? '',
+    });
+    return true;
+  }
+
+  /// True se per il ristorante attivo c'è già una richiesta in attesa.
+  Future<bool> hasPendingCloudRequest() async {
+    _ensureSignedIn();
+    final rid = _settings.restaurantId;
+    if (rid.isEmpty) return false;
+    final row = await _sb
+        .from('cloud_requests')
+        .select('id')
+        .eq('restaurant_id', rid)
+        .eq('status', 'pending')
+        .maybeSingle();
+    return row != null;
+  }
+
   // ------------------------------------------------------------------- SYNC
 
   /// Sincronizzazione bidirezionale col cloud: prima scarica le novità, poi
@@ -174,9 +217,15 @@ class CloudSyncService {
       throw Exception('Crea o entra in un ristorante prima di sincronizzare.');
     }
 
-    // 0) Aggiorna il piano del ristorante (potrebbe essere cambiato sul server,
-    //    es. abbonamento attivato). È solo informativo: non blocchiamo nulla.
-    await refreshPlan();
+    // 0) Aggiorna il piano del ristorante. Il server rifiuta comunque le
+    //    cantine senza piano cloud (RLS): meglio fermarsi qui con un
+    //    messaggio chiaro che mostrare un errore criptico del server.
+    final plan = await refreshPlan();
+    if (plan != 'cloud') {
+      throw Exception(
+          'Il cloud non è attivo per questo ristorante. Invia la richiesta '
+          'di attivazione dalle impostazioni e attendi l\'approvazione.');
+    }
 
     // 1) PULL — scarica i record cambiati dopo l'ultimo pull e fondili.
     onProgress?.call('Scarico le novità dal cloud...');

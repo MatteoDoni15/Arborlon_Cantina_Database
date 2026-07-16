@@ -21,6 +21,14 @@ class CloudConfig {
   /// Bucket dello Storage Supabase dove vivono le foto delle etichette.
   static const String photosBucket = 'photos';
 
+  /// Deep link di ritorno del login OAuth (Google): dopo l'autenticazione nel
+  /// browser, Supabase riapre l'app su questo URI. Deve combaciare con:
+  ///  - l'intent-filter in android/app/src/main/AndroidManifest.xml,
+  ///  - CFBundleURLTypes in ios/Runner/Info.plist,
+  ///  - Supabase → Authentication → URL Configuration → Redirect URLs.
+  static const String oauthRedirectUri =
+      'io.supabase.cantinavini://login-callback/';
+
   /// True solo se le chiavi sono presenti: in caso contrario il cloud è
   /// inattivo e l'app resta 100% locale + P2P.
   static bool get isConfigured =>

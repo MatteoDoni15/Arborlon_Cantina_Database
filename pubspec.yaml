@@ -27,7 +27,7 @@ dependencies:
 
   # Backup / ripristino su file
   share_plus: ^10.0.2
-  file_picker: ^8.1.2
+  file_picker: ^10.0.0
   archive: ^3.6.1
 
   # Sync P2P sullo stesso WiFi

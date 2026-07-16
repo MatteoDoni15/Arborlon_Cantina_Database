@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -5,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/app_settings.dart';
 import '../../sync/cloud_sync_service.dart';
 import 'cloud_auth_dialogs.dart';
+import 'invite_qr.dart';
 
 /// Sezione "Cloud (Premium)" delle impostazioni.
 ///
@@ -27,9 +30,23 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
   final _newRestaurant = TextEditingController();
   final _joinCode = TextEditingController();
   bool _busy = false;
+  StreamSubscription<dynamic>? _authSub;
+
+  @override
+  void initState() {
+    super.initState();
+    // Il login Google si conclude FUORI dall'app (browser + deep link):
+    // ridisegna la card quando lo stato di autenticazione cambia.
+    if (_cloud.isAvailable) {
+      _authSub = _cloud.authChanges.listen((_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
 
   @override
   void dispose() {
+    _authSub?.cancel();
     _email.dispose();
     _password.dispose();
     _newRestaurant.dispose();
@@ -194,6 +211,25 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
             child: const Text('Password dimenticata?'),
           ),
         ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            const Expanded(child: Divider()),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text('oppure',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+            ),
+            const Expanded(child: Divider()),
+          ],
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(44)),
+          onPressed: _busy ? null : _googleSignIn,
+          icon: const Icon(Icons.g_mobiledata, size: 30),
+          label: const Text('Continua con Google'),
+        ),
       ],
     );
   }
@@ -225,10 +261,16 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
 
         const Divider(height: 28),
 
-        // Entra in un ristorante con codice invito.
+        // Entra in un ristorante: QR di un collega oppure codice scritto.
         const Text('Oppure entra in un ristorante esistente',
             style: TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
+        FilledButton.tonalIcon(
+          onPressed: _busy ? null : _scanInvite,
+          icon: const Icon(Icons.qr_code_scanner),
+          label: const Text('Inquadra il QR invito di un collega'),
+        ),
+        const SizedBox(height: 12),
         TextField(
           controller: _joinCode,
           textCapitalization: TextCapitalization.characters,
@@ -298,27 +340,31 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
                         _snack('Codice copiato');
                       },
                     ),
+                    IconButton(
+                      tooltip: 'Mostra QR invito',
+                      icon: const Icon(Icons.qr_code_2),
+                      onPressed: () => showInviteQrDialog(
+                        context,
+                        restaurantName: _settings.restaurantName,
+                        inviteCode: _settings.inviteCode,
+                      ),
+                    ),
                   ],
                 ),
               ],
             ),
           ),
         ),
-        if (!_settings.restaurantHasCloud) ...[
-          const SizedBox(height: 8),
-          Text(
-            'Questo ristorante è sul piano Gratuito (P2P). Il cloud qui è in '
-            'modalità prova; l\'abbonamento si attiverà coi pagamenti.',
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-          ),
-        ],
         const SizedBox(height: 12),
 
-        FilledButton.icon(
-          onPressed: _busy ? null : _syncNow,
-          icon: const Icon(Icons.cloud_sync),
-          label: const Text('Sincronizza col cloud ora'),
-        ),
+        if (!_settings.restaurantHasCloud)
+          _cloudLocked()
+        else
+          FilledButton.icon(
+            onPressed: _busy ? null : _syncNow,
+            icon: const Icon(Icons.cloud_sync),
+            label: const Text('Sincronizza col cloud ora'),
+          ),
         const SizedBox(height: 4),
         TextButton.icon(
           onPressed: _busy ? null : _leaveRestaurant,
@@ -326,6 +372,52 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
           label: const Text('Cambia ristorante'),
         ),
       ],
+    );
+  }
+
+  // Piano gratuito: la sync cloud è bloccata dal server finché il gestore non
+  // attiva il piano. Da qui parte la richiesta di attivazione; l'acquisto
+  // in-app prenderà il posto della richiesta quando ci saranno i pagamenti.
+  Widget _cloudLocked() {
+    return Card(
+      color: Colors.amber.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.lock_outline),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text('Cloud non attivo per questo ristorante',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'La sincronizzazione a distanza fa parte della versione Pro. '
+              'Invia la richiesta di attivazione: appena approvata, il badge '
+              'diventerà "Cloud" e potrai sincronizzare. (Acquisto in-app in '
+              'arrivo.)',
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: _busy ? null : _requestCloud,
+              icon: const Icon(Icons.send),
+              label: const Text('Richiedi attivazione Cloud'),
+            ),
+            TextButton.icon(
+              onPressed: _busy ? null : _checkPlan,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Ho fatto richiesta: controlla se è attivo'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -423,6 +515,25 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
     if (ok == true) _snack('Password cambiata.');
   }
 
+  Future<void> _googleSignIn() async {
+    await _run(() async {
+      await _cloud.signInWithGoogle();
+      _snack('Completa l\'accesso nel browser: al termine tornerai nell\'app.');
+    });
+  }
+
+  Future<void> _scanInvite() async {
+    final code = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const InviteScannerScreen()),
+    );
+    if (code == null || !mounted) return;
+    await _run(() async {
+      final info = await _cloud.joinRestaurant(code);
+      _snack('Sei entrato in "${info.name}".');
+    });
+  }
+
   Future<void> _signOut() => _run(() => _cloud.signOut());
 
   Future<void> _createRestaurant() async {
@@ -442,6 +553,24 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
   }
 
   Future<void> _leaveRestaurant() => _run(() => _settings.clearRestaurant());
+
+  Future<void> _requestCloud() async {
+    await _run(() async {
+      final sent = await _cloud.requestCloud();
+      _snack(sent
+          ? 'Richiesta inviata! Riceverai l\'attivazione a breve.'
+          : 'C\'è già una richiesta in attesa per questo ristorante.');
+    });
+  }
+
+  Future<void> _checkPlan() async {
+    await _run(() async {
+      final plan = await _cloud.refreshPlan();
+      _snack(plan == 'cloud'
+          ? 'Cloud attivo! Ora puoi sincronizzare. 🎉'
+          : 'Non ancora attivo: la richiesta è in lavorazione.');
+    });
+  }
 
   Future<void> _syncNow() async {
     setState(() => _busy = true);

@@ -17,9 +17,10 @@ android/local.properties
 ios/Pods/
 ios/.symlinks/
 
-# Chiavi locali (Supabase): copia .env.example in .env e compilalo.
-# Il .env NON va mai committato.
+# Chiavi Supabase per run/build locali (vedi docs/CLOUD-SETUP.md §4):
+# copia .env.example in .env e compilalo. NON vanno nel repository.
 .env
+env.json
 
 # OS
 .DS_Store
