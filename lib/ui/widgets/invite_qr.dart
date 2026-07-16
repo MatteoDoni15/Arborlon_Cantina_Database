@@ -46,11 +46,17 @@ Future<void> showInviteQrDialog(
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          QrImageView(
-            data: InviteQr.encode(inviteCode),
-            size: 220,
-            version: QrVersions.auto,
-            backgroundColor: Colors.white,
+          // Il SizedBox a misura fissa è OBBLIGATORIO: AlertDialog misura il
+          // contenuto con le dimensioni intrinseche, che il LayoutBuilder
+          // interno di QrImageView non supporta (dialogo invisibile).
+          SizedBox.square(
+            dimension: 220,
+            child: QrImageView(
+              data: InviteQr.encode(inviteCode),
+              size: 220,
+              version: QrVersions.auto,
+              backgroundColor: Colors.white,
+            ),
           ),
           const SizedBox(height: 12),
           SelectableText(
