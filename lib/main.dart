@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -5,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'data/db/app_database.dart';
 import 'services/app_settings.dart';
 import 'services/device_service.dart';
+import 'sync/auto_sync_service.dart';
 import 'sync/cloud_config.dart';
 import 'ui/screens/home_screen.dart';
 import 'ui/theme.dart';
@@ -28,6 +31,10 @@ Future<void> main() async {
       publishableKey: CloudConfig.supabaseAnonKey,
     );
   }
+  // Sync P2P automatica: server sempre acceso (per farsi trovare dai
+  // colleghi) + ricerca periodica dei dispositivi fidati. Non deve
+  // bloccare l'avvio: parte in parallelo.
+  unawaited(AutoSyncService.instance.start());
   runApp(const CantinaApp());
 }
 

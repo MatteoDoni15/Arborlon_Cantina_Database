@@ -24,7 +24,7 @@ class AppDatabase {
     final path = p.join(dir.path, 'cantina_vini.db');
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -39,6 +39,10 @@ class AppDatabase {
     if (oldVersion < 2) {
       // v2: seconda foto dell'etichetta (retro).
       await db.execute('ALTER TABLE wines ADD COLUMN photo_path_back TEXT');
+    }
+    if (oldVersion < 3) {
+      // v3: dizionario nomi vino per l'OCR + coda contributi verso il cloud.
+      await _createDictionaryTables(db);
     }
   }
 
@@ -87,6 +91,34 @@ class AppDatabase {
       CREATE TABLE app_meta (
         key   TEXT PRIMARY KEY,
         value TEXT
+      )
+    ''');
+
+    await _createDictionaryTables(db);
+  }
+
+  /// Dizionario dei nomi di vino usato dall'OCR (caricato dall'asset
+  /// wine_names.csv da DictionaryService) e coda dei nomi da proporre al
+  /// dizionario collaborativo sul cloud.
+  Future<void> _createDictionaryTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS dictionary (
+        name_norm     TEXT NOT NULL,
+        producer_norm TEXT NOT NULL DEFAULT '',
+        name          TEXT NOT NULL,
+        producer      TEXT NOT NULL DEFAULT '',
+        region        TEXT NOT NULL DEFAULT '',
+        source        TEXT NOT NULL DEFAULT 'asset',
+        PRIMARY KEY (name_norm, producer_norm)
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS dictionary_outbox (
+        name       TEXT NOT NULL,
+        producer   TEXT NOT NULL DEFAULT '',
+        region     TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (name, producer)
       )
     ''');
   }

@@ -12,6 +12,7 @@ import 'package:shelf_router/shelf_router.dart';
 import '../data/repositories/inventory_repository.dart';
 import '../services/device_service.dart';
 import '../services/photo_service.dart';
+import '../services/trusted_peers.dart';
 import 'sync_payload.dart';
 
 /// Sincronizzazione "peer-to-peer" tra telefoni sullo stesso WiFi.
@@ -39,7 +40,7 @@ class P2pSyncService {
   Future<HostInfo> startHost() async {
     if (_server != null) {
       return HostInfo(
-        ip: await _wifiIp(),
+        ip: await localIp(),
         port: port,
         name: await DeviceService.instance.deviceName(),
         deviceId: await DeviceService.instance.deviceId(),
@@ -60,7 +61,7 @@ class P2pSyncService {
     );
 
     return HostInfo(
-      ip: await _wifiIp(),
+      ip: await localIp(),
       port: port,
       name: await DeviceService.instance.deviceName(),
       deviceId: await DeviceService.instance.deviceId(),
@@ -94,6 +95,26 @@ class P2pSyncService {
     final resolved =
         await payload.withResolvedPhotoPaths(_photos.resolvePath);
     final result = await resolved.applyTo(_repo);
+
+    // Chi ci ha sincronizzato diventa (o resta) un dispositivo fidato:
+    // memorizziamo id, nome e IP per poterlo ritrovare in automatico.
+    final guestId = req.headers['x-device-id'];
+    if (guestId != null && guestId.isNotEmpty) {
+      final rawName = req.headers['x-device-name'] ?? '';
+      final conn =
+          req.context['shelf.io.connection_info'] as HttpConnectionInfo?;
+      String guestName;
+      try {
+        guestName = Uri.decodeComponent(rawName);
+      } catch (_) {
+        guestName = rawName;
+      }
+      await TrustedPeers.instance.record(
+        deviceId: guestId,
+        name: guestName,
+        ip: conn?.remoteAddress.address,
+      );
+    }
 
     // Comunica all'ospite quali foto non abbiamo: ce le inviera' lui.
     final missing = await _missingPhotos(payload.photoFileNames());
@@ -159,12 +180,19 @@ class P2pSyncService {
         }
       }
 
-      // 3) Manda i nostri dati all'host.
+      // 3) Manda i nostri dati all'host, presentandoci con id e nome: cosi'
+      //    l'host puo' memorizzarci tra i suoi dispositivi fidati.
       onProgress?.call('Invio i miei dati...');
       final myPayload = await SyncPayload.fromRepository(_repo);
       final postRes = await client
           .post(Uri.parse('$base/payload'),
-              headers: _jsonHeaders, body: jsonEncode(myPayload.toJson()))
+              headers: {
+                ..._jsonHeaders,
+                'x-device-id': await DeviceService.instance.deviceId(),
+                'x-device-name': Uri.encodeComponent(
+                    await DeviceService.instance.deviceName()),
+              },
+              body: jsonEncode(myPayload.toJson()))
           .timeout(const Duration(seconds: 20));
       final postJson =
           jsonDecode(postRes.body) as Map<String, dynamic>;
@@ -186,6 +214,13 @@ class P2pSyncService {
           if (up.statusCode == 200) photosOut++;
         }
       }
+
+      // Sync riuscita: l'host diventa (o resta) un dispositivo fidato.
+      await TrustedPeers.instance.record(
+        deviceId: host.deviceId,
+        name: host.name,
+        ip: host.ip,
+      );
 
       return SyncStats(
         received: SyncStatsCounts(
@@ -213,6 +248,27 @@ class P2pSyncService {
     }
   }
 
+  /// Interroga `/ping` su un IP: se risponde c'e' un telefono con l'app
+  /// aperta, e ritorna le sue info. Timeout breve: serve per la scansione
+  /// della rete, dove quasi tutti gli indirizzi non risponderanno.
+  Future<HostInfo?> probe(String ip,
+      {Duration timeout = const Duration(milliseconds: 600)}) async {
+    try {
+      final res =
+          await http.get(Uri.parse('http://$ip:$port/ping')).timeout(timeout);
+      if (res.statusCode != 200) return null;
+      final m = jsonDecode(res.body) as Map<String, dynamic>;
+      return HostInfo(
+        ip: ip,
+        port: port,
+        name: (m['name'] ?? 'Telefono') as String,
+        deviceId: (m['deviceId'] ?? '') as String,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   // --------------------------------------------------------------- helpers
 
   Future<Set<String>> _missingPhotos(Set<String> names) async {
@@ -224,9 +280,27 @@ class P2pSyncService {
     return missing;
   }
 
-  Future<String> _wifiIp() async {
-    final ip = await NetworkInfo().getWifiIP();
-    return ip ?? '0.0.0.0';
+  /// IP locale del telefono. Prova prima il WiFi "classico"; se non c'è
+  /// (es. siamo NOI a fare da hotspot) cerca tra le interfacce di rete un
+  /// indirizzo IPv4 privato (l'hotspot Android è tipicamente 192.168.x.1).
+  Future<String> localIp() async {
+    final wifi = await NetworkInfo().getWifiIP();
+    if (wifi != null && wifi.isNotEmpty && wifi != '0.0.0.0') return wifi;
+    try {
+      final interfaces = await NetworkInterface.list(
+          type: InternetAddressType.IPv4, includeLoopback: false);
+      final addrs = [
+        for (final i in interfaces) ...i.addresses.map((a) => a.address)
+      ];
+      bool isPrivate(String a) =>
+          a.startsWith('192.168.') ||
+          a.startsWith('10.') ||
+          RegExp(r'^172\.(1[6-9]|2\d|3[01])\.').hasMatch(a);
+      return addrs.firstWhere(isPrivate,
+          orElse: () => addrs.isEmpty ? '0.0.0.0' : addrs.first);
+    } catch (_) {
+      return '0.0.0.0';
+    }
   }
 
   String _safe(String name) => p.basename(name);

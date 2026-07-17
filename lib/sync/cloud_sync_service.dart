@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/repositories/inventory_repository.dart';
 import '../services/app_settings.dart';
+import '../services/dictionary_service.dart';
 import '../services/photo_service.dart';
 import 'cloud_config.dart';
 import 'sync_payload.dart';
@@ -276,6 +277,12 @@ class CloudSyncService {
       [...localWines, ...localMovements].map(_updatedAt),
       pushWm,
     ));
+
+    // 3) Dizionario collaborativo: propone gli eventuali nomi in coda
+    //    (best effort, non deve mai far fallire la sync).
+    try {
+      await DictionaryService.instance.tryFlush();
+    } catch (_) {}
 
     _repo.notifyChanged();
 

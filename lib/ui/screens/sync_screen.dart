@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../../services/trusted_peers.dart';
+import '../../sync/auto_sync_service.dart';
 import '../../sync/p2p_sync_service.dart';
 
 /// Sincronizzazione tra telefoni sullo stesso WiFi.
@@ -19,10 +22,20 @@ class _SyncScreenState extends State<SyncScreen> {
   final _sync = P2pSyncService.instance;
   HostInfo? _host;
   bool _starting = false;
+  bool _autoEnabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _autoEnabled = AutoSyncService.instance.enabled;
+    TrustedPeers.instance.load();
+  }
 
   @override
   void dispose() {
-    _sync.stopHost();
+    // Con l'auto-sync attivo il server deve restare acceso anche fuori da
+    // questa schermata: e' cio' che ci rende trovabili dai colleghi.
+    if (!AutoSyncService.instance.enabled) _sync.stopHost();
     super.dispose();
   }
 
@@ -70,9 +83,140 @@ class _SyncScreenState extends State<SyncScreen> {
             ),
           ] else
             _qrView(_host!),
+
+          const SizedBox(height: 24),
+          _autoSyncSection(),
+          const SizedBox(height: 16),
+          _hotspotCard(),
         ],
       ),
     );
+  }
+
+  Widget _autoSyncSection() {
+    final auto = AutoSyncService.instance;
+    return Card(
+      child: Column(
+        children: [
+          SwitchListTile(
+            title: const Text('Sincronizzazione automatica'),
+            subtitle: Text(
+                'Con l\'app aperta, ogni ${AutoSyncService.checkEvery.inMinutes} '
+                'minuti cerco i telefoni fidati sulla rete e mi allineo da solo '
+                '(anche l\'altro telefono deve avere l\'app aperta).'),
+            value: _autoEnabled,
+            onChanged: (v) async {
+              await auto.setEnabled(v);
+              // Se stavamo mostrando il QR, il server deve restare su.
+              if (!v && _host != null) await _sync.startHost();
+              setState(() => _autoEnabled = v);
+            },
+          ),
+          if (_autoEnabled)
+            ValueListenableBuilder<String?>(
+              valueListenable: auto.lastOutcome,
+              builder: (context, outcome, _) => outcome == null
+                  ? const SizedBox.shrink()
+                  : ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.autorenew, size: 20),
+                      title: Text(outcome,
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ),
+            ),
+          AnimatedBuilder(
+            animation: TrustedPeers.instance,
+            builder: (context, _) {
+              final peers = TrustedPeers.instance.all;
+              if (peers.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Text(
+                    'Nessun dispositivo fidato. Fai una prima sincronizzazione '
+                    'col QR: da quel momento vi riconoscerete da soli.',
+                    style: TextStyle(fontStyle: FontStyle.italic),
+                  ),
+                );
+              }
+              final fmt = DateFormat('dd/MM HH:mm', 'it_IT');
+              return Column(
+                children: [
+                  for (final p in peers)
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.smartphone),
+                      title: Text(p.name),
+                      subtitle: Text(p.lastSync == null
+                          ? 'Mai sincronizzato'
+                          : 'Ultima sync: ${fmt.format(p.lastSync!)}'),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        tooltip: 'Rimuovi dai fidati',
+                        onPressed: () => _removePeer(p),
+                      ),
+                    ),
+                  if (_autoEnabled)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 8, bottom: 4),
+                        child: TextButton.icon(
+                          onPressed: () => AutoSyncService.instance.checkNow(),
+                          icon: const Icon(Icons.search),
+                          label: const Text('Cerca ora'),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _hotspotCard() {
+    return Card(
+      child: ExpansionTile(
+        leading: const Icon(Icons.wifi_tethering),
+        title: const Text('Nessun WiFi? Usa l\'hotspot'),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: const [
+          Text(
+            'Anche senza la rete del ristorante potete sincronizzarvi:\n\n'
+            '1. Su UN telefono attiva l\'hotspot personale '
+            '(Impostazioni → Hotspot).\n'
+            '2. Collega l\'altro telefono a quell\'hotspot, come a una '
+            'normale rete WiFi.\n'
+            '3. Torna qui e usa il QR come al solito. Funziona anche tra '
+            'Android e iPhone, e vale pure per la sincronizzazione '
+            'automatica.',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _removePeer(TrustedPeer peer) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Rimuovere ${peer.name}?'),
+        content: const Text(
+            'Non verra\' piu\' cercato dalla sincronizzazione automatica. '
+            'Potrai riaggiungerlo con una sync via QR.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Annulla')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Rimuovi')),
+        ],
+      ),
+    );
+    if (ok == true) await TrustedPeers.instance.remove(peer.deviceId);
   }
 
   Widget _qrView(HostInfo host) {
@@ -120,8 +264,9 @@ class _SyncScreenState extends State<SyncScreen> {
     try {
       final host = await _sync.startHost();
       if (host.ip == '0.0.0.0') {
-        _snack('WiFi non rilevato. Connettiti alla rete del ristorante.');
-        await _sync.stopHost();
+        _snack('Rete non rilevata. Connettiti al WiFi del ristorante '
+            'oppure attiva un hotspot (vedi in basso).');
+        if (!AutoSyncService.instance.enabled) await _sync.stopHost();
         return;
       }
       setState(() => _host = host);

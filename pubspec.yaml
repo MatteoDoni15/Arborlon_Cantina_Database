@@ -54,6 +54,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/Logo_cantina_vini.png
+    - assets/wine_names.csv
 
 # Configurazione dell'icona dell'app. Per generarla:
 #   flutter pub get

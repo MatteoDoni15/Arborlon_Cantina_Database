@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../data/models/wine.dart';
 import '../../data/repositories/inventory_repository.dart';
+import '../../services/dictionary_service.dart';
 import '../../services/ocr_service.dart';
 import '../../services/photo_service.dart';
 
@@ -242,7 +243,9 @@ class _WineFormScreenState extends State<WineFormScreen> {
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.auto_fix_high),
-            label: const Text('Leggi etichetta fronte (riempi automaticamente)'),
+            label: Text(_photoPathBack != null
+                ? 'Leggi etichette fronte e retro (riempi automaticamente)'
+                : 'Leggi etichetta fronte (riempi automaticamente)'),
           ),
         ],
       ],
@@ -341,26 +344,124 @@ class _WineFormScreenState extends State<WineFormScreen> {
     if (_photoPath == null) return;
     setState(() => _ocrRunning = true);
     try {
-      final guess = await OcrService.instance.guessWine(_photoPath!);
+      // I vini gia' in cantina e il dizionario dei nomi aiutano l'OCR: se una
+      // riga letta somiglia a un nome noto, viene proposto quello (corretto).
+      final existing = await _repo.winesWithStock();
+      final dictionary = await DictionaryService.instance.entries();
+      final guess = await OcrService.instance.guessWine(
+        _photoPath!,
+        backImagePath: _photoPathBack,
+        knownNames: [for (final w in existing) w.wine.name],
+        dictionary: dictionary,
+      );
       if (!mounted) return;
-      if (guess.name.isEmpty && guess.vintage == null) {
+      if (guess.isEmpty) {
         _snack('Nessun testo riconosciuto sull\'etichetta.');
         return;
       }
       setState(() {
-        if (_name.text.trim().isEmpty && guess.name.isNotEmpty) {
-          _name.text = guess.name;
-        }
         if (_vintage.text.trim().isEmpty && guess.vintage != null) {
           _vintage.text = '${guess.vintage}';
         }
+        if (_producer.text.trim().isEmpty && guess.producer.isNotEmpty) {
+          _producer.text = guess.producer;
+        }
+        if (_region.text.trim().isEmpty && guess.region.isNotEmpty) {
+          _region.text = guess.region;
+        }
       });
+      if (guess.candidates.length > 1) {
+        final chosen = await _pickOcrName(guess.candidates);
+        if (chosen != null && mounted) {
+          _applyCandidate(chosen, existing);
+        }
+      } else if (guess.candidates.isNotEmpty && _name.text.trim().isEmpty) {
+        _applyCandidate(guess.candidates.first, existing);
+      }
       _snack('Etichetta letta. Controlla e correggi se serve.');
     } catch (e) {
       _snack('OCR non riuscito: $e');
     } finally {
       if (mounted) setState(() => _ocrRunning = false);
     }
+  }
+
+  /// Applica il candidato scelto: nome sempre, e — solo sui campi ancora
+  /// vuoti — produttore/regione/tipo presi dalla cantina (se il vino c'è
+  /// già) o dal dizionario dei nomi.
+  void _applyCandidate(OcrCandidate c, List<WineWithStock> existing) {
+    Wine? cellar;
+    if (c.fromCellar) {
+      for (final w in existing) {
+        if (w.wine.name == c.text) {
+          cellar = w.wine;
+          break;
+        }
+      }
+    }
+    setState(() {
+      _name.text = c.text;
+      final producer =
+          (cellar?.producer.isNotEmpty ?? false) ? cellar!.producer : c.producer;
+      if (_producer.text.trim().isEmpty && producer.isNotEmpty) {
+        _producer.text = producer;
+      }
+      final region =
+          (cellar?.region.isNotEmpty ?? false) ? cellar!.region : c.region;
+      if (_region.text.trim().isEmpty && region.isNotEmpty) {
+        _region.text = region;
+      }
+      if (cellar != null &&
+          cellar.type.isNotEmpty &&
+          _wineTypes.contains(cellar.type)) {
+        _type = cellar.type;
+      }
+    });
+  }
+
+  /// Lista dei possibili nomi letti dall'etichetta, dal piu' probabile al
+  /// meno. Ritorna il candidato scelto, o null se l'utente chiude senza
+  /// scegliere.
+  Future<OcrCandidate?> _pickOcrName(List<OcrCandidate> candidates) {
+    return showModalBottomSheet<OcrCandidate>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
+              child: Text('Quale di questi è il nome del vino?',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final c in candidates)
+                    ListTile(
+                      leading: Icon(c.fromCellar
+                          ? Icons.inventory_2
+                          : c.fromDictionary
+                              ? Icons.menu_book
+                              : Icons.wine_bar),
+                      title: Text(c.text),
+                      subtitle: c.fromCellar
+                          ? const Text('Già presente in cantina')
+                          : c.fromDictionary
+                              ? const Text('Dal dizionario dei vini')
+                              : null,
+                      trailing: Text('${(c.score * 100).round()}%',
+                          style: TextStyle(color: Colors.grey.shade600)),
+                      onTap: () => Navigator.pop(context, c),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _save() async {
@@ -383,6 +484,10 @@ class _WineFormScreenState extends State<WineFormScreen> {
       updatedAt: DateTime.now().millisecondsSinceEpoch,
     );
     await _repo.upsertWine(wine);
+    // Propone il nome al dizionario collaborativo (vedi DictionaryService):
+    // scrive in una coda locale, la rete parte in background e non blocca.
+    await DictionaryService.instance.recordWine(
+        name: wine.name, producer: wine.producer, region: wine.region);
     if (mounted) Navigator.pop(context, wine.id);
   }
 
