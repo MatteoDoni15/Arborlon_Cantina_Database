@@ -8,7 +8,7 @@
 > - `lib/sync/cloud_sync_service.dart` — push/pull dello stesso `SyncPayload`
 > - `lib/services/app_settings.dart` — flag premium + modalità sync + codice ristorante
 > - `lib/ui/widgets/cloud_settings_card.dart` — sezione "Cloud (Premium)" nelle Impostazioni
-> - `lib/ui/widgets/cloud_auth_dialogs.dart` — recupero password, conferma email, cambio password (codici a 6 cifre)
+> - `lib/ui/widgets/cloud_auth_dialogs.dart` — recupero password, conferma email, cambio password (link via email + deep link)
 > - `supabase/schema.sql` — tabelle, RLS e bucket foto
 
 Questo documento descrive come si aggancia il cloud **sopra** la Fase 1, senza

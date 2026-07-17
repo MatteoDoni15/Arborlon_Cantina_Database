@@ -46,10 +46,15 @@ class CloudSyncService {
 
   /// Registra un nuovo account. Ritorna `true` se Supabase richiede la
   /// conferma dell'email (nessuna sessione creata subito): in quel caso
-  /// l'utente riceve un codice a 6 cifre da inserire nell'app.
+  /// l'utente riceve un'email con un link di conferma da aprire.
   Future<bool> signUp(String email, String password) async {
     _ensureAvailable();
-    final res = await _sb.auth.signUp(email: email.trim(), password: password);
+    final res = await _sb.auth.signUp(
+      email: email.trim(),
+      password: password,
+      // Il link di conferma nell'email riapre l'app (deep link) già loggata.
+      emailRedirectTo: CloudConfig.oauthRedirectUri,
+    );
     return res.session == null;
   }
 
@@ -70,32 +75,20 @@ class CloudSyncService {
     if (isAvailable) await _sb.auth.signOut();
   }
 
-  // Tutti i flussi email usano un CODICE a 6 cifre (niente link: su mobile
-  // richiederebbero i deep link). Perché il codice compaia nelle email, i
-  // template su Supabase devono contenere `{{ .Token }}` — vedi
-  // docs/CLOUD-SETUP.md, sezione "Email di autenticazione".
+  // Tutti i flussi email usano il LINK contenuto nell'email (template di
+  // default di Supabase): aprendolo, il deep link riporta nell'app già
+  // autenticati. Nessun codice da ricopiare, nessun template da modificare.
 
-  /// "Password dimenticata" (passo 1/2): spedisce via email il codice di
-  /// recupero. Funziona anche senza essere loggati.
-  Future<void> sendPasswordResetCode(String email) async {
+  /// "Password dimenticata": spedisce l'email col link di recupero.
+  /// Aprendo il link l'app si riapre già autenticata: a quel punto la UI
+  /// riceve [AuthChangeEvent.passwordRecovery] su [authChanges] e propone
+  /// subito la scelta della nuova password.
+  Future<void> sendPasswordResetEmail(String email) async {
     _ensureAvailable();
-    await _sb.auth.resetPasswordForEmail(email.trim());
-  }
-
-  /// "Password dimenticata" (passo 2/2): verifica il codice ricevuto via
-  /// email e imposta la nuova password. Al termine l'utente è loggato.
-  Future<void> confirmPasswordReset({
-    required String email,
-    required String code,
-    required String newPassword,
-  }) async {
-    _ensureAvailable();
-    await _sb.auth.verifyOTP(
-      type: OtpType.recovery,
-      email: email.trim(),
-      token: code.trim(),
+    await _sb.auth.resetPasswordForEmail(
+      email.trim(),
+      redirectTo: CloudConfig.oauthRedirectUri,
     );
-    await _sb.auth.updateUser(UserAttributes(password: newPassword));
   }
 
   /// Cambia la password dell'utente loggato (Supabase manda anche l'email
@@ -105,24 +98,14 @@ class CloudSyncService {
     await _sb.auth.updateUser(UserAttributes(password: newPassword));
   }
 
-  /// Rispedisce il codice di conferma della registrazione (se l'email non è
-  /// arrivata o il codice è scaduto).
-  Future<void> resendSignupCode(String email) async {
+  /// Rispedisce l'email di conferma della registrazione (se non è arrivata
+  /// o il link è scaduto).
+  Future<void> resendSignupEmail(String email) async {
     _ensureAvailable();
-    await _sb.auth.resend(type: OtpType.signup, email: email.trim());
-  }
-
-  /// Conferma la registrazione con il codice a 6 cifre ricevuto via email.
-  /// Al termine l'utente è loggato.
-  Future<void> confirmSignup({
-    required String email,
-    required String code,
-  }) async {
-    _ensureAvailable();
-    await _sb.auth.verifyOTP(
+    await _sb.auth.resend(
       type: OtpType.signup,
       email: email.trim(),
-      token: code.trim(),
+      emailRedirectTo: CloudConfig.oauthRedirectUri,
     );
   }
 

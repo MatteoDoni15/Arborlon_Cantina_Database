@@ -144,37 +144,23 @@ ufficiale (Supabase → Authentication → Emails → **SMTP Settings**):
 - Mittente: `noreply@arborloncantina.com` (dominio verificato su Mailtrap:
   DKIM `rwmt1`/`rwmt2` + DMARC — controllabile in Mailtrap → Sending Domains)
 
-### Template col codice a 6 cifre (⚠️ passaggio obbligatorio)
+### Template email
 
-L'app **non usa i link** nelle email (su mobile servirebbero i deep link): usa
-**codici a 6 cifre** che l'utente ricopia nell'app. Perché il codice compaia,
-i template in Supabase → Authentication → Emails → **Templates** devono
-contenere `{{ .Token }}`. Da sistemare almeno questi due:
-
-- **Reset password** (usato da "Password dimenticata?"):
-
-  ```html
-  <h2>Recupero password — Arborlon Cantina</h2>
-  <p>Il tuo codice di recupero è: <strong style="font-size:24px">{{ .Token }}</strong></p>
-  <p>Inseriscilo nell'app entro un'ora. Se non hai richiesto tu il codice, ignora questa email.</p>
-  ```
-
-- **Confirm sign up** (usato alla registrazione):
-
-  ```html
-  <h2>Benvenuto in Arborlon Cantina!</h2>
-  <p>Il tuo codice di conferma è: <strong style="font-size:24px">{{ .Token }}</strong></p>
-  <p>Inseriscilo nell'app per attivare l'account.</p>
-  ```
-
-Se un template contiene solo `{{ .ConfirmationURL }}` (il default), l'utente
-riceve un link che non riporta all'app: il flusso col codice non funziona.
+Si usano i template di **default** di Supabase (link `{{ .ConfirmationURL }}`):
+**nessuna modifica necessaria**. Tutti i flussi passano dal link nell'email:
+aprendolo dal telefono si torna nell'app tramite deep link (lo stesso
+`io.supabase.cantinavini://login-callback/` registrato per il login Google,
+già presente in Supabase → Authentication → URL Configuration → Redirect
+URLs). Puoi personalizzare i testi dei template, basta che il link resti.
 
 ### Flussi disponibili nell'app (Impostazioni → Cloud)
 
-- **Password dimenticata?** → email → codice → nuova password (e accesso).
-- **Registrati** → codice di conferma chiesto subito dopo (con "invia di nuovo").
-- Login con email non confermata → l'app propone da sola il codice.
+- **Registrati** → l'app invita ad aprire il link di conferma ricevuto via
+  email: il link riapre l'app già connessa (con "invia di nuovo l'email" e
+  "Ho confermato" come alternativa se il link è stato aperto altrove).
+- Login con email non confermata → l'app mostra lo stesso invito.
+- **Password dimenticata?** → email col link → il link riapre l'app già
+  autenticata e si sceglie subito la nuova password.
 - **Cambia password** (icona 🔑 accanto all'account, da loggati).
 
 ### Limiti e test

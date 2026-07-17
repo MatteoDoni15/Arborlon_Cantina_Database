@@ -30,16 +30,25 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
   final _newRestaurant = TextEditingController();
   final _joinCode = TextEditingController();
   bool _busy = false;
+  // false = "Accedi" (account esistente), true = "Registrati" (account nuovo).
+  bool _signUpMode = false;
   StreamSubscription<dynamic>? _authSub;
 
   @override
   void initState() {
     super.initState();
-    // Il login Google si conclude FUORI dall'app (browser + deep link):
-    // ridisegna la card quando lo stato di autenticazione cambia.
+    // Login Google e link nelle email si concludono FUORI dall'app
+    // (browser + deep link): ridisegna la card quando lo stato di
+    // autenticazione cambia.
     if (_cloud.isAvailable) {
-      _authSub = _cloud.authChanges.listen((_) {
-        if (mounted) setState(() {});
+      _authSub = _cloud.authChanges.listen((state) {
+        if (!mounted) return;
+        setState(() {});
+        // Rientro dal link "password dimenticata": l'utente è già
+        // autenticato, proponi subito la scelta della nuova password.
+        if (state.event == AuthChangeEvent.passwordRecovery) {
+          _promptNewPasswordAfterRecovery();
+        }
       });
     }
   }
@@ -169,6 +178,37 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
         const Text('Accedi al cloud',
             style: TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(
+                value: false,
+                label: Text('Accedi'),
+                icon: Icon(Icons.login),
+              ),
+              ButtonSegment(
+                value: true,
+                label: Text('Registrati'),
+                icon: Icon(Icons.person_add),
+              ),
+            ],
+            selected: {_signUpMode},
+            onSelectionChanged:
+                _busy ? null : (s) => setState(() => _signUpMode = s.first),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _signUpMode
+              ? 'Crea un account nuovo: ti manderemo un\'email con un link '
+                  'di conferma. Se invece ti sei già registrato su un altro '
+                  'dispositivo, usa "Accedi" con la stessa email.'
+              : 'Entra con email e password del tuo account, anche se l\'hai '
+                  'creato su un altro dispositivo.',
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+        ),
+        const SizedBox(height: 12),
         TextField(
           controller: _email,
           keyboardType: TextInputType.emailAddress,
@@ -181,36 +221,30 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
         TextField(
           controller: _password,
           obscureText: true,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Password',
-            prefixIcon: Icon(Icons.lock),
+            helperText:
+                _signUpMode ? 'Scegli una password di almeno 6 caratteri.' : null,
+            prefixIcon: const Icon(Icons.lock),
           ),
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: FilledButton(
-                onPressed: _busy ? null : () => _auth(signUp: false),
-                child: const Text('Accedi'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _busy ? null : () => _auth(signUp: true),
-                child: const Text('Registrati'),
-              ),
-            ),
-          ],
-        ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: _busy ? null : _forgotPassword,
-            child: const Text('Password dimenticata?'),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: _busy ? null : () => _auth(signUp: _signUpMode),
+            icon: Icon(_signUpMode ? Icons.person_add : Icons.login),
+            label: Text(_signUpMode ? 'Crea account' : 'Accedi'),
           ),
         ),
+        if (!_signUpMode)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _busy ? null : _forgotPassword,
+              child: const Text('Password dimenticata?'),
+            ),
+          ),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -478,12 +512,12 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
             await _cloud.signUp(_email.text, _password.text);
         if (!mounted) return;
         if (needsConfirm) {
-          // Supabase ha spedito il codice di conferma: chiedilo subito.
-          final ok = await showConfirmSignupDialog(context,
-              email: _email.text.trim());
+          // Supabase ha spedito l'email col link di conferma: spiegalo.
+          final ok = await showCheckEmailDialog(context,
+              email: _email.text.trim(), password: _password.text);
           _snack(ok == true
               ? 'Email confermata: accesso eseguito.'
-              : 'Registrazione creata: conferma l\'email per accedere.');
+              : 'Account creato: apri il link nell\'email per confermarlo.');
         } else {
           _snack('Registrazione completata: accesso eseguito.');
         }
@@ -492,15 +526,15 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
         _snack('Accesso eseguito.');
       }
     } on AuthException catch (e) {
-      // Login con email mai confermata → proponi subito il codice.
+      // Login con email mai confermata → ricorda di aprire il link.
       final notConfirmed = e.code == 'email_not_confirmed' ||
           e.message.toLowerCase().contains('not confirmed');
       if (!signUp && notConfirmed && mounted) {
-        final ok = await showConfirmSignupDialog(context,
-            email: _email.text.trim());
+        final ok = await showCheckEmailDialog(context,
+            email: _email.text.trim(), password: _password.text);
         _snack(ok == true
             ? 'Email confermata: accesso eseguito.'
-            : 'Email non ancora confermata.');
+            : 'Email non ancora confermata: apri il link che ti abbiamo mandato.');
       } else {
         _snack('Errore: ${e.message}');
       }
@@ -511,15 +545,19 @@ class _CloudSettingsCardState extends State<CloudSettingsCard> {
     }
   }
 
-  /// Flusso "password dimenticata": codice via email → nuova password.
-  /// A fine flusso l'utente risulta loggato (il codice vale come accesso).
-  Future<void> _forgotPassword() async {
-    final ok = await showPasswordResetDialog(context,
-        initialEmail: _email.text.trim());
-    if (ok == true && mounted) {
-      setState(() {}); // ora isSignedIn è true: mostra il pannello ristorante
-      _snack('Password aggiornata: accesso eseguito.');
-    }
+  /// Flusso "password dimenticata": email col link → il link riapre l'app
+  /// già autenticata → [_promptNewPasswordAfterRecovery] chiede la nuova
+  /// password.
+  Future<void> _forgotPassword() {
+    return showPasswordResetDialog(context, initialEmail: _email.text.trim());
+  }
+
+  /// Rientro dal link di recupero: l'utente è dentro, scelga la password.
+  Future<void> _promptNewPasswordAfterRecovery() async {
+    final ok = await showChangePasswordDialog(context);
+    _snack(ok == true
+        ? 'Password aggiornata: accesso eseguito.'
+        : 'Sei dentro! Puoi cambiare la password quando vuoi (icona 🔑).');
   }
 
   Future<void> _changePassword() async {
