@@ -42,7 +42,8 @@ class DictionaryService {
   /// Alza di 1 quando cambi assets/wine_names.csv: alla prima apertura
   /// l'app reimporta il file nel dizionario locale.
   /// v2: aggiunti 19.333 vini italiani da X-Wines (licenza CC0).
-  static const _assetVersion = 2;
+  /// v3: estesi a tutti i ~100.400 vini mondiali di X-Wines.
+  static const _assetVersion = 3;
 
   final _db = AppDatabase.instance;
   List<WineDictEntry>? _cache;
