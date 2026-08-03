@@ -221,7 +221,10 @@ class _WineDetailScreenState extends State<WineDetailScreen> {
   Widget _infoTable(Wine w) {
     final rows = <(String, String)>[
       if (w.type.isNotEmpty) ('Tipo', w.type),
+      if (w.grape.isNotEmpty) ('Uvaggio', w.grape),
       if (w.region.isNotEmpty) ('Regione', w.region),
+      if (w.denomination.isNotEmpty) ('Denominazione', w.denomination),
+      if (w.country.isNotEmpty) ('Stato', w.country),
       if (w.supplier.isNotEmpty) ('Fornitore', w.supplier),
       if (w.location.isNotEmpty) ('Posizione', w.location),
       if (w.priceBuy > 0) ('Prezzo acquisto', euro(w.priceBuy)),

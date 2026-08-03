@@ -10,7 +10,10 @@ class Wine {
   final String producer; // produttore / cantina
   final int? vintage; // annata (es. 2019)
   final String type; // Rosso, Bianco, Rosato, Bollicine, Dolce...
-  final String region; // regione / denominazione
+  final String grape; // uvaggio / vitigno
+  final String region; // regione
+  final String denomination; // denominazione (es. DOCG, DOC, IGT)
+  final String country; // stato
   final String supplier; // fornitore da cui si compra
   final String location; // posizione in cantina (scaffale, fila...)
   final double priceBuy; // prezzo di acquisto medio
@@ -29,7 +32,10 @@ class Wine {
     this.producer = '',
     this.vintage,
     this.type = '',
+    this.grape = '',
     this.region = '',
+    this.denomination = '',
+    this.country = '',
     this.supplier = '',
     this.location = '',
     this.priceBuy = 0,
@@ -46,7 +52,10 @@ class Wine {
     String? producer,
     int? vintage,
     String? type,
+    String? grape,
     String? region,
+    String? denomination,
+    String? country,
     String? supplier,
     String? location,
     double? priceBuy,
@@ -65,7 +74,10 @@ class Wine {
       producer: producer ?? this.producer,
       vintage: vintage ?? this.vintage,
       type: type ?? this.type,
+      grape: grape ?? this.grape,
       region: region ?? this.region,
+      denomination: denomination ?? this.denomination,
+      country: country ?? this.country,
       supplier: supplier ?? this.supplier,
       location: location ?? this.location,
       priceBuy: priceBuy ?? this.priceBuy,
@@ -85,7 +97,10 @@ class Wine {
         'producer': producer,
         'vintage': vintage,
         'type': type,
+        'grape': grape,
         'region': region,
+        'denomination': denomination,
+        'country': country,
         'supplier': supplier,
         'location': location,
         'price_buy': priceBuy,
@@ -103,7 +118,10 @@ class Wine {
         producer: (m['producer'] ?? '') as String,
         vintage: m['vintage'] as int?,
         type: (m['type'] ?? '') as String,
+        grape: (m['grape'] ?? '') as String,
         region: (m['region'] ?? '') as String,
+        denomination: (m['denomination'] ?? '') as String,
+        country: (m['country'] ?? '') as String,
         supplier: (m['supplier'] ?? '') as String,
         location: (m['location'] ?? '') as String,
         priceBuy: (m['price_buy'] as num?)?.toDouble() ?? 0,

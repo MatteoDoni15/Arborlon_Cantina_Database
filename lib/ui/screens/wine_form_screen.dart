@@ -34,7 +34,10 @@ class _WineFormScreenState extends State<WineFormScreen> {
   late final TextEditingController _name;
   late final TextEditingController _producer;
   late final TextEditingController _vintage;
+  late final TextEditingController _grape;
   late final TextEditingController _region;
+  late final TextEditingController _denomination;
+  late final TextEditingController _country;
   late final TextEditingController _supplier;
   late final TextEditingController _location;
   late final TextEditingController _priceBuy;
@@ -54,7 +57,10 @@ class _WineFormScreenState extends State<WineFormScreen> {
     _producer = TextEditingController(text: w?.producer ?? '');
     _vintage =
         TextEditingController(text: w?.vintage != null ? '${w!.vintage}' : '');
+    _grape = TextEditingController(text: w?.grape ?? '');
     _region = TextEditingController(text: w?.region ?? '');
+    _denomination = TextEditingController(text: w?.denomination ?? '');
+    _country = TextEditingController(text: w?.country ?? '');
     _supplier = TextEditingController(text: w?.supplier ?? '');
     _location = TextEditingController(text: w?.location ?? '');
     _priceBuy = TextEditingController(
@@ -75,7 +81,10 @@ class _WineFormScreenState extends State<WineFormScreen> {
       _name,
       _producer,
       _vintage,
+      _grape,
       _region,
+      _denomination,
+      _country,
       _supplier,
       _location,
       _priceBuy,
@@ -147,8 +156,40 @@ class _WineFormScreenState extends State<WineFormScreen> {
               controller: _region,
               textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
-                  labelText: 'Regione / denominazione',
+                  labelText: 'Regione',
                   prefixIcon: Icon(Icons.place)),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _denomination,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                        labelText: 'Denominazione (es. DOCG)',
+                        prefixIcon: Icon(Icons.verified)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _country,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                        labelText: 'Stato',
+                        prefixIcon: Icon(Icons.public)),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _grape,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                  labelText: 'Uvaggio',
+                  prefixIcon: Icon(Icons.grass)),
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -473,7 +514,10 @@ class _WineFormScreenState extends State<WineFormScreen> {
       producer: _producer.text.trim(),
       vintage: int.tryParse(_vintage.text.trim()),
       type: _type,
+      grape: _grape.text.trim(),
       region: _region.text.trim(),
+      denomination: _denomination.text.trim(),
+      country: _country.text.trim(),
       supplier: _supplier.text.trim(),
       location: _location.text.trim(),
       priceBuy: _parsePrice(_priceBuy.text),

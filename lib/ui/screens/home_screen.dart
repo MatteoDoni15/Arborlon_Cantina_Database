@@ -21,6 +21,20 @@ class _HomeScreenState extends State<HomeScreen> {
   final _repo = InventoryRepository.instance;
   String _search = '';
 
+  String? _filterType;
+  String? _filterGrape;
+  String? _filterRegion;
+  String? _filterDenomination;
+  String? _filterCountry;
+
+  int get _activeFilterCount => [
+        _filterType,
+        _filterGrape,
+        _filterRegion,
+        _filterDenomination,
+        _filterCountry,
+      ].where((v) => v != null).length;
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -80,17 +94,41 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-          child: TextField(
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search),
-              hintText: 'Cerca per nome, produttore, regione...',
-            ),
-            onChanged: (v) => setState(() => _search = v),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.search),
+                    hintText: 'Cerca per nome, produttore, regione...',
+                  ),
+                  onChanged: (v) => setState(() => _search = v),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Badge(
+                isLabelVisible: _activeFilterCount > 0,
+                label: Text('$_activeFilterCount'),
+                child: IconButton.filledTonal(
+                  tooltip: 'Filtra',
+                  icon: const Icon(Icons.filter_list),
+                  onPressed: _openFilterSheet,
+                ),
+              ),
+            ],
           ),
         ),
+        _activeFilterChips(),
         Expanded(
           child: FutureBuilder<List<WineWithStock>>(
-            future: _repo.winesWithStock(search: _search),
+            future: _repo.winesWithStock(
+              search: _search,
+              type: _filterType,
+              grape: _filterGrape,
+              region: _filterRegion,
+              denomination: _filterDenomination,
+              country: _filterCountry,
+            ),
             builder: (context, snap) {
               if (!snap.hasData) {
                 return const Center(child: CircularProgressIndicator());
@@ -123,6 +161,143 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _openWine(String id) async {
     await Navigator.push(context,
         MaterialPageRoute(builder: (_) => WineDetailScreen(wineId: id)));
+  }
+
+  /// Chip dei filtri attivi, ognuno rimovibile singolarmente.
+  Widget _activeFilterChips() {
+    final chips = <Widget>[
+      if (_filterType != null)
+        _filterChip('Tipo: $_filterType', () => setState(() => _filterType = null)),
+      if (_filterGrape != null)
+        _filterChip('Uvaggio: $_filterGrape', () => setState(() => _filterGrape = null)),
+      if (_filterRegion != null)
+        _filterChip('Regione: $_filterRegion', () => setState(() => _filterRegion = null)),
+      if (_filterDenomination != null)
+        _filterChip('Denominazione: $_filterDenomination',
+            () => setState(() => _filterDenomination = null)),
+      if (_filterCountry != null)
+        _filterChip('Stato: $_filterCountry', () => setState(() => _filterCountry = null)),
+    ];
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+      child: Wrap(spacing: 8, runSpacing: 4, children: chips),
+    );
+  }
+
+  Widget _filterChip(String label, VoidCallback onRemoved) {
+    return Chip(
+      label: Text(label, style: const TextStyle(fontSize: 12)),
+      onDeleted: onRemoved,
+      visualDensity: VisualDensity.compact,
+    );
+  }
+
+  /// Apre il pannello dei filtri: uvaggio, regione, denominazione, stato e
+  /// tipo, ognuno popolato con i soli valori gia' presenti in cantina.
+  Future<void> _openFilterSheet() async {
+    final options = await Future.wait([
+      _repo.distinctWineValues('type'),
+      _repo.distinctWineValues('grape'),
+      _repo.distinctWineValues('region'),
+      _repo.distinctWineValues('denomination'),
+      _repo.distinctWineValues('country'),
+    ]);
+    if (!mounted) return;
+
+    String? type = _filterType;
+    String? grape = _filterGrape;
+    String? region = _filterRegion;
+    String? denomination = _filterDenomination;
+    String? country = _filterCountry;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 16,
+                  bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const Text('Filtra cantina',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 18)),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () => setSheetState(() {
+                            type = null;
+                            grape = null;
+                            region = null;
+                            denomination = null;
+                            country = null;
+                          }),
+                          child: const Text('Azzera'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    _filterDropdown('Tipo', type, options[0],
+                        (v) => setSheetState(() => type = v)),
+                    const SizedBox(height: 12),
+                    _filterDropdown('Uvaggio', grape, options[1],
+                        (v) => setSheetState(() => grape = v)),
+                    const SizedBox(height: 12),
+                    _filterDropdown('Regione', region, options[2],
+                        (v) => setSheetState(() => region = v)),
+                    const SizedBox(height: 12),
+                    _filterDropdown('Denominazione', denomination, options[3],
+                        (v) => setSheetState(() => denomination = v)),
+                    const SizedBox(height: 12),
+                    _filterDropdown('Stato', country, options[4],
+                        (v) => setSheetState(() => country = v)),
+                    const SizedBox(height: 20),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text('Applica filtri'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    setState(() {
+      _filterType = type;
+      _filterGrape = grape;
+      _filterRegion = region;
+      _filterDenomination = denomination;
+      _filterCountry = country;
+    });
+  }
+
+  Widget _filterDropdown(String label, String? value, List<String> options,
+      ValueChanged<String?> onChanged) {
+    return DropdownButtonFormField<String?>(
+      value: value,
+      decoration: InputDecoration(
+          labelText: label, border: const OutlineInputBorder()),
+      items: [
+        const DropdownMenuItem<String?>(value: null, child: Text('Tutti')),
+        ...options.map(
+            (o) => DropdownMenuItem<String?>(value: o, child: Text(o))),
+      ],
+      onChanged: onChanged,
+    );
   }
 
   // ------------------------------------------------------------ MOVIMENTI

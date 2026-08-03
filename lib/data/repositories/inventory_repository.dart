@@ -24,7 +24,14 @@ class InventoryRepository extends ChangeNotifier {
 
   // ----------------------------------------------------------------- WINES
 
-  Future<List<WineWithStock>> winesWithStock({String search = ''}) async {
+  Future<List<WineWithStock>> winesWithStock({
+    String search = '',
+    String? type,
+    String? grape,
+    String? region,
+    String? denomination,
+    String? country,
+  }) async {
     final db = await _db.database;
     // Giacenza = somma con segno dei movimenti non cancellati, per vino.
     final rows = await db.rawQuery('''
@@ -49,9 +56,44 @@ class InventoryRepository extends ChangeNotifier {
                 .toLowerCase();
         if (!hay.contains(q)) continue;
       }
+      if (type != null && type.isNotEmpty && wine.type != type) continue;
+      if (grape != null && grape.isNotEmpty && wine.grape != grape) continue;
+      if (region != null && region.isNotEmpty && wine.region != region) {
+        continue;
+      }
+      if (denomination != null &&
+          denomination.isNotEmpty &&
+          wine.denomination != denomination) {
+        continue;
+      }
+      if (country != null && country.isNotEmpty && wine.country != country) {
+        continue;
+      }
       result.add(WineWithStock(wine, (r['stock'] as num).toInt()));
     }
     return result;
+  }
+
+  /// Valori distinti (non vuoti) presenti tra i vini in cantina per una
+  /// delle colonne filtrabili, usati per popolare i menu a tendina dei
+  /// filtri. [column] e' ristretta a un elenco noto per sicurezza.
+  static const _filterableColumns = {
+    'type',
+    'grape',
+    'region',
+    'denomination',
+    'country',
+  };
+
+  Future<List<String>> distinctWineValues(String column) async {
+    if (!_filterableColumns.contains(column)) return [];
+    final db = await _db.database;
+    final rows = await db.rawQuery('''
+      SELECT DISTINCT $column AS v FROM wines
+      WHERE deleted = 0 AND TRIM($column) != ''
+      ORDER BY $column COLLATE NOCASE
+    ''');
+    return rows.map((r) => r['v'] as String).toList();
   }
 
   Future<Wine?> wineById(String id) async {
