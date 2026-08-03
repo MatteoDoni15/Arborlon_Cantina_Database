@@ -32,9 +32,11 @@ declare
   api_key   text;
   rest_name text;
   v_to      text := 'teoxdoni@gmail.com';
-  -- Mittente: indirizzo su un dominio verificato in Mailtrap (o il dominio
-  -- demo `demomailtrap.co`). La casella non deve esistere davvero.
-  v_from    text := 'hello@demomailtrap.co';
+  -- Mittente: stesso dominio verificato già usato per l'SMTP di Supabase
+  -- Auth (vedi docs/CLOUD-SETUP.md) — il dominio demo `demomailtrap.co` ha
+  -- una quota di invio propria, separata da quella dell'account, che si
+  -- esaurisce in fretta.
+  v_from    text := 'noreply@arborloncantina.com';
 begin
   select decrypted_secret into api_key
     from vault.decrypted_secrets
