@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/models/activity_event.dart';
 import '../../data/models/movement.dart';
 import '../../data/repositories/inventory_repository.dart';
 import '../widgets/empty_state.dart';
@@ -38,7 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Cantina Vini'),
@@ -61,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
             tabs: [
               Tab(text: 'CANTINA', icon: Icon(Icons.wine_bar)),
               Tab(text: 'MOVIMENTI', icon: Icon(Icons.swap_vert)),
+              Tab(text: 'REGISTRO', icon: Icon(Icons.history)),
             ],
           ),
         ),
@@ -70,6 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               _buildCantina(),
               _buildMovimenti(),
+              _buildRegistro(),
             ],
           ),
         ),
@@ -327,6 +330,34 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     );
   }
+
+  // -------------------------------------------------------------- REGISTRO
+
+  Widget _buildRegistro() {
+    return FutureBuilder<List<ActivityEvent>>(
+      future: _repo.recentActivity(),
+      builder: (context, snap) {
+        if (!snap.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final events = snap.data!;
+        if (events.isEmpty) {
+          return const EmptyState(
+            icon: Icons.history,
+            title: 'Nessuna attività',
+            message:
+                'Qui vedrai chi ha aggiunto un vino o registrato una vendita.',
+          );
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.all(12),
+          itemCount: events.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (context, i) => _ActivityRow(event: events[i]),
+        );
+      },
+    );
+  }
 }
 
 class _WineCard extends StatelessWidget {
@@ -427,7 +458,10 @@ class _MovementRow extends StatelessWidget {
           leading: PhotoThumb(path: movement.photoPath, size: 48),
           title: Text(wineName,
               maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle: Text(dateTime(movement.createdAt)),
+          subtitle: Text(
+            '${dateTime(movement.createdAt)}'
+            '${movement.authorName.isNotEmpty ? ' · ${movement.authorName}' : ''}',
+          ),
           trailing: Text(
             '${isIn ? '+' : '−'}${movement.quantity}',
             style: TextStyle(
@@ -438,6 +472,56 @@ class _MovementRow extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Una riga del registro attività: racconta in una frase leggibile chi ha
+/// fatto cosa ("Mario ha venduto 2 bottiglie di Chianti 2020").
+class _ActivityRow extends StatelessWidget {
+  final ActivityEvent event;
+  const _ActivityRow({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, color) = switch (event.type) {
+      ActivityType.wineAdded => (Icons.add_circle, Colors.blue.shade700),
+      ActivityType.wineEdited => (Icons.edit, Colors.orange.shade700),
+      ActivityType.movementIn => (Icons.download, Colors.green.shade700),
+      ActivityType.movementOut => (Icons.upload, Colors.red.shade700),
+    };
+    final title = switch (event.type) {
+      ActivityType.wineAdded =>
+        '${event.authorLabel} ha aggiunto ${event.wineLabel}',
+      ActivityType.wineEdited =>
+        '${event.authorLabel} ha modificato ${event.wineLabel}',
+      ActivityType.movementIn =>
+        '${event.authorLabel} ha caricato ${event.quantity} bottiglie di ${event.wineLabel}',
+      ActivityType.movementOut =>
+        '${event.authorLabel} ha venduto ${event.quantity} bottiglie di ${event.wineLabel}',
+    };
+    final isMovement = event.type == ActivityType.movementIn ||
+        event.type == ActivityType.movementOut;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(
+        backgroundColor: color.withOpacity(0.12),
+        child: Icon(icon, color: color),
+      ),
+      title: Text(title),
+      subtitle: Text(
+        '${dateTime(event.at)}'
+        '${isMovement && event.unitPrice > 0 ? ' · ${euro(event.unitPrice)}/cad' : ''}'
+        '${event.note.isNotEmpty ? '\n${event.note}' : ''}',
+      ),
+      isThreeLine: event.note.isNotEmpty,
+      trailing: isMovement
+          ? Text(
+              '${event.type == ActivityType.movementIn ? '+' : '−'}${event.quantity}',
+              style: TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.bold, color: color),
+            )
+          : null,
     );
   }
 }

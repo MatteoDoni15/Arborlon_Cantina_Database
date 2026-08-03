@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../db/app_database.dart';
+import '../models/activity_event.dart';
 import '../models/movement.dart';
 import '../models/wine.dart';
 
@@ -112,17 +113,29 @@ class InventoryRepository extends ChangeNotifier {
     return (rows.first['s'] as num).toInt();
   }
 
-  Future<void> upsertWine(Wine wine) async {
+  /// Crea o modifica un vino. [authorName] diventa il creatore (se il vino
+  /// è nuovo) o l'ultimo modificatore (se già esisteva) per il registro
+  /// attività — la data/autore di creazione originali non vengono mai persi.
+  Future<void> upsertWine(Wine wine, {required String authorName}) async {
     final db = await _db.database;
-    await db.insert('wines', wine.copyWith(updatedAt: _now).toMap(),
+    final existing = await wineById(wine.id);
+    final now = _now;
+    final toSave = wine.copyWith(
+      updatedAt: now,
+      createdAt: existing?.createdAt ?? now,
+      createdBy: existing?.createdBy ?? authorName,
+      updatedBy: authorName,
+    );
+    await db.insert('wines', toSave.toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace);
     notifyListeners();
   }
 
-  Future<void> softDeleteWine(String id) async {
+  Future<void> softDeleteWine(String id, {required String authorName}) async {
     final db = await _db.database;
     await db.update(
-        'wines', {'deleted': 1, 'updated_at': _now},
+        'wines',
+        {'deleted': 1, 'updated_at': _now, 'updated_by': authorName},
         where: 'id = ?', whereArgs: [id]);
     // Cancella (soft) anche i movimenti collegati.
     await db.update(
@@ -147,6 +160,80 @@ class InventoryRepository extends ChangeNotifier {
     final rows = await db.query('movements',
         where: 'deleted = 0', orderBy: 'created_at DESC', limit: limit);
     return rows.map(Movement.fromMap).toList();
+  }
+
+  // -------------------------------------------------------- ACTIVITY LOG
+
+  /// Registro attività leggibile: chi ha aggiunto/modificato un vino, chi ha
+  /// caricato o venduto bottiglie, in ordine cronologico decrescente.
+  /// Ricostruito al volo da vini e movimenti (nessuna tabella dedicata).
+  Future<List<ActivityEvent>> recentActivity({int limit = 200}) async {
+    final db = await _db.database;
+    final events = <ActivityEvent>[];
+
+    final wineRows = await db.query('wines', where: 'deleted = 0');
+    for (final r in wineRows) {
+      final w = Wine.fromMap(r);
+      if (w.createdAt > 0) {
+        events.add(ActivityEvent(
+          type: ActivityType.wineAdded,
+          at: w.createdAt,
+          wineId: w.id,
+          wineLabel: w.label,
+          author: w.createdBy,
+        ));
+      }
+      if (w.updatedBy.isNotEmpty && w.updatedAt > w.createdAt) {
+        events.add(ActivityEvent(
+          type: ActivityType.wineEdited,
+          at: w.updatedAt,
+          wineId: w.id,
+          wineLabel: w.label,
+          author: w.updatedBy,
+        ));
+      }
+    }
+
+    final movRows = await db.rawQuery('''
+      SELECT m.*, COALESCE(w.name, '') AS wine_name,
+        COALESCE(w.producer, '') AS wine_producer, w.vintage AS wine_vintage
+      FROM movements m
+      LEFT JOIN wines w ON w.id = m.wine_id
+      WHERE m.deleted = 0
+      ORDER BY m.created_at DESC
+      LIMIT ?
+    ''', [limit]);
+    for (final r in movRows) {
+      final m = Movement.fromMap(r);
+      final name = r['wine_name'] as String? ?? '';
+      final label = name.isEmpty ? 'Vino eliminato' : _movementWineLabel(r);
+      events.add(ActivityEvent(
+        type: m.kind == MovementKind.inbound
+            ? ActivityType.movementIn
+            : ActivityType.movementOut,
+        at: m.createdAt,
+        wineId: m.wineId,
+        wineLabel: label,
+        author: m.authorName,
+        quantity: m.quantity,
+        unitPrice: m.unitPrice,
+        note: m.note,
+      ));
+    }
+
+    events.sort((a, b) => b.at.compareTo(a.at));
+    return events.take(limit).toList();
+  }
+
+  /// Ricompone l'etichetta del vino (nome, annata, produttore) dalla riga
+  /// unita movimento+vino della query di [recentActivity].
+  String _movementWineLabel(Map<String, Object?> r) {
+    final name = r['wine_name'] as String? ?? '';
+    final vintage = r['wine_vintage'] as int?;
+    final producer = r['wine_producer'] as String? ?? '';
+    final v = vintage != null ? ' $vintage' : '';
+    final p = producer.isNotEmpty ? ' · $producer' : '';
+    return '$name$v'.trim() + p;
   }
 
   Future<void> addMovement(Movement m) async {

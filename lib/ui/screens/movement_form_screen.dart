@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../../data/models/movement.dart';
 import '../../data/models/wine.dart';
 import '../../data/repositories/inventory_repository.dart';
+import '../../services/activity_author.dart';
 import '../../services/device_service.dart';
 import '../../services/photo_service.dart';
 import '../widgets/photo_thumb.dart';
@@ -212,6 +213,7 @@ class _MovementFormScreenState extends State<MovementFormScreen> {
     setState(() => _saving = true);
     final now = DateTime.now().millisecondsSinceEpoch;
     final deviceId = await DeviceService.instance.deviceId();
+    final authorName = await ActivityAuthor.current();
     final mov = Movement(
       id: const Uuid().v4(),
       wineId: widget.wine.id,
@@ -221,6 +223,7 @@ class _MovementFormScreenState extends State<MovementFormScreen> {
       note: _note.text.trim(),
       photoPath: _photoPath,
       deviceId: deviceId,
+      authorName: authorName,
       createdAt: now,
       updatedAt: now,
     );

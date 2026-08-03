@@ -24,7 +24,7 @@ class AppDatabase {
     final path = p.join(dir.path, 'cantina_vini.db');
     return openDatabase(
       path,
-      version: 4,
+      version: 5,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -50,6 +50,20 @@ class AppDatabase {
       await db.execute("ALTER TABLE wines ADD COLUMN denomination TEXT NOT NULL DEFAULT ''");
       await db.execute("ALTER TABLE wines ADD COLUMN country TEXT NOT NULL DEFAULT ''");
     }
+    if (oldVersion < 5) {
+      // v5: chi ha fatto cosa, per il registro attività.
+      await db.execute(
+          'ALTER TABLE wines ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0');
+      await db.execute(
+          "ALTER TABLE wines ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
+      await db.execute(
+          "ALTER TABLE wines ADD COLUMN updated_by TEXT NOT NULL DEFAULT ''");
+      // I vini già presenti non hanno una data di creazione nota: usiamo
+      // l'ultima modifica come stima (comunque precedente a questa versione).
+      await db.execute('UPDATE wines SET created_at = updated_at');
+      await db.execute(
+          "ALTER TABLE movements ADD COLUMN author_name TEXT NOT NULL DEFAULT ''");
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -71,6 +85,9 @@ class AppDatabase {
         notes       TEXT NOT NULL DEFAULT '',
         photo_path      TEXT,
         photo_path_back TEXT,
+        created_at  INTEGER NOT NULL DEFAULT 0,
+        created_by  TEXT NOT NULL DEFAULT '',
+        updated_by  TEXT NOT NULL DEFAULT '',
         updated_at  INTEGER NOT NULL,
         deleted     INTEGER NOT NULL DEFAULT 0
       )
@@ -86,6 +103,7 @@ class AppDatabase {
         note        TEXT NOT NULL DEFAULT '',
         photo_path  TEXT,
         device_id   TEXT NOT NULL DEFAULT '',
+        author_name TEXT NOT NULL DEFAULT '',
         created_at  INTEGER NOT NULL,
         updated_at  INTEGER NOT NULL,
         deleted     INTEGER NOT NULL DEFAULT 0

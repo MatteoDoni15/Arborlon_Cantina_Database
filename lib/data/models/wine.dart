@@ -26,6 +26,11 @@ class Wine {
   final int updatedAt; // millisecondi epoch dell'ultima modifica
   final bool deleted;
 
+  // Campi per il registro attività: chi ha aggiunto/modificato il vino.
+  final int createdAt; // millisecondi epoch di quando è stato aggiunto
+  final String createdBy; // nome di chi lo ha aggiunto
+  final String updatedBy; // nome di chi ha fatto l'ultima modifica
+
   const Wine({
     required this.id,
     required this.name,
@@ -45,6 +50,9 @@ class Wine {
     this.photoPathBack,
     required this.updatedAt,
     this.deleted = false,
+    this.createdAt = 0,
+    this.createdBy = '',
+    this.updatedBy = '',
   });
 
   Wine copyWith({
@@ -67,6 +75,9 @@ class Wine {
     bool clearPhotoBack = false,
     int? updatedAt,
     bool? deleted,
+    int? createdAt,
+    String? createdBy,
+    String? updatedBy,
   }) {
     return Wine(
       id: id,
@@ -88,6 +99,9 @@ class Wine {
           clearPhotoBack ? null : (photoPathBack ?? this.photoPathBack),
       updatedAt: updatedAt ?? this.updatedAt,
       deleted: deleted ?? this.deleted,
+      createdAt: createdAt ?? this.createdAt,
+      createdBy: createdBy ?? this.createdBy,
+      updatedBy: updatedBy ?? this.updatedBy,
     );
   }
 
@@ -110,6 +124,9 @@ class Wine {
         'photo_path_back': photoPathBack,
         'updated_at': updatedAt,
         'deleted': deleted ? 1 : 0,
+        'created_at': createdAt,
+        'created_by': createdBy,
+        'updated_by': updatedBy,
       };
 
   factory Wine.fromMap(Map<String, dynamic> m) => Wine(
@@ -131,6 +148,9 @@ class Wine {
         photoPathBack: m['photo_path_back'] as String?,
         updatedAt: (m['updated_at'] as num?)?.toInt() ?? 0,
         deleted: (m['deleted'] as num?)?.toInt() == 1,
+        createdAt: (m['created_at'] as num?)?.toInt() ?? 0,
+        createdBy: (m['created_by'] ?? '') as String,
+        updatedBy: (m['updated_by'] ?? '') as String,
       );
 
   /// Versione "trasportabile" sulla rete / nel backup: la foto viaggia

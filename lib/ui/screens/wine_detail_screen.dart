@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../data/models/movement.dart';
 import '../../data/models/wine.dart';
 import '../../data/repositories/inventory_repository.dart';
+import '../../services/activity_author.dart';
 import '../widgets/formatters.dart';
 import '../widgets/photo_thumb.dart';
 import 'movement_form_screen.dart';
@@ -230,6 +231,10 @@ class _WineDetailScreenState extends State<WineDetailScreen> {
       if (w.priceBuy > 0) ('Prezzo acquisto', euro(w.priceBuy)),
       if (w.priceSell > 0) ('Prezzo vendita', euro(w.priceSell)),
       if (w.notes.isNotEmpty) ('Note', w.notes),
+      if (w.createdBy.isNotEmpty)
+        ('Aggiunto da', '${w.createdBy} · ${dateShort(w.createdAt)}'),
+      if (w.updatedBy.isNotEmpty && w.updatedAt > w.createdAt)
+        ('Ultima modifica', '${w.updatedBy} · ${dateShort(w.updatedAt)}'),
     ];
     if (rows.isEmpty) return const SizedBox.shrink();
     return Card(
@@ -270,6 +275,7 @@ class _WineDetailScreenState extends State<WineDetailScreen> {
       ),
       subtitle: Text(
         '${dateTime(m.createdAt)}'
+        '${m.authorName.isNotEmpty ? ' · ${m.authorName}' : ''}'
         '${m.unitPrice > 0 ? ' · ${euro(m.unitPrice)}/cad' : ''}'
         '${m.note.isNotEmpty ? '\n${m.note}' : ''}',
       ),
@@ -312,7 +318,8 @@ class _WineDetailScreenState extends State<WineDetailScreen> {
       ),
     );
     if (ok == true) {
-      await _repo.softDeleteWine(widget.wineId);
+      final authorName = await ActivityAuthor.current();
+      await _repo.softDeleteWine(widget.wineId, authorName: authorName);
       if (mounted) Navigator.pop(context);
     }
   }

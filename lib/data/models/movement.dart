@@ -22,6 +22,7 @@ class Movement {
   final String note;
   final String? photoPath; // foto scattata al momento di compra/vendita
   final String deviceId; // telefono che ha registrato il movimento
+  final String authorName; // nome di chi ha registrato il movimento
 
   final int createdAt; // quando e' avvenuto il movimento
   final int updatedAt; // per la fusione (LWW) in caso di correzioni
@@ -36,6 +37,7 @@ class Movement {
     this.note = '',
     this.photoPath,
     required this.deviceId,
+    this.authorName = '',
     required this.createdAt,
     required this.updatedAt,
     this.deleted = false,
@@ -78,6 +80,7 @@ class Movement {
         'note': note,
         'photo_path': photoPath,
         'device_id': deviceId,
+        'author_name': authorName,
         'created_at': createdAt,
         'updated_at': updatedAt,
         'deleted': deleted ? 1 : 0,
@@ -92,6 +95,7 @@ class Movement {
         note: (m['note'] ?? '') as String,
         photoPath: m['photo_path'] as String?,
         deviceId: (m['device_id'] ?? '') as String,
+        authorName: (m['author_name'] ?? '') as String,
         createdAt: (m['created_at'] as num?)?.toInt() ?? 0,
         updatedAt: (m['updated_at'] as num?)?.toInt() ?? 0,
         deleted: (m['deleted'] as num?)?.toInt() == 1,

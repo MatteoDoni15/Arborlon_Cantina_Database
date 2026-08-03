@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../data/models/wine.dart';
 import '../../data/repositories/inventory_repository.dart';
+import '../../services/activity_author.dart';
 import '../../services/dictionary_service.dart';
 import '../../services/ocr_service.dart';
 import '../../services/photo_service.dart';
@@ -527,7 +528,8 @@ class _WineFormScreenState extends State<WineFormScreen> {
       photoPathBack: _photoPathBack,
       updatedAt: DateTime.now().millisecondsSinceEpoch,
     );
-    await _repo.upsertWine(wine);
+    final authorName = await ActivityAuthor.current();
+    await _repo.upsertWine(wine, authorName: authorName);
     // Propone il nome al dizionario collaborativo (vedi DictionaryService):
     // scrive in una coda locale, la rete parte in background e non blocca.
     await DictionaryService.instance.recordWine(
