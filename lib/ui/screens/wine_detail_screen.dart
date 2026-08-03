@@ -8,6 +8,7 @@ import '../../data/repositories/inventory_repository.dart';
 import '../../services/activity_author.dart';
 import '../widgets/formatters.dart';
 import '../widgets/photo_thumb.dart';
+import '../widgets/wine_qr.dart';
 import 'movement_form_screen.dart';
 import 'wine_form_screen.dart';
 
@@ -63,6 +64,11 @@ class _WineDetailScreenState extends State<WineDetailScreen> {
       appBar: AppBar(
         title: Text(wine.name, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_2),
+            tooltip: 'Stampa QR etichetta',
+            onPressed: () => showWineQrPrintDialog(context, wine),
+          ),
           IconButton(
             icon: const Icon(Icons.edit),
             onPressed: () async {

@@ -9,6 +9,7 @@ import '../../services/activity_author.dart';
 import '../../services/dictionary_service.dart';
 import '../../services/ocr_service.dart';
 import '../../services/photo_service.dart';
+import '../widgets/wine_qr.dart';
 
 const _wineTypes = [
   'Rosso',
@@ -108,6 +109,13 @@ class _WineFormScreenState extends State<WineFormScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            OutlinedButton.icon(
+              onPressed: _scanQr,
+              icon: const Icon(Icons.qr_code_scanner),
+              label: const Text(
+                  'Scansiona QR o codice del vino (se presente sulla bottiglia)'),
+            ),
+            const SizedBox(height: 16),
             _photoSection(),
             const SizedBox(height: 16),
             TextFormField(
@@ -380,6 +388,38 @@ class _WineFormScreenState extends State<WineFormScreen> {
       path = await PhotoService.instance.pickFromGallery();
     }
     if (path != null) onPick(path);
+  }
+
+  /// Tentativo iniziale, prima della foto: se la bottiglia ha gia' un QR con
+  /// i dati del vino (stampato da questa cantina o da un'altra, vedi
+  /// [WineQrCodec]), inquadrandolo si riempiono subito tutti i campi. Se il
+  /// codice inquadrato non e' in questo formato (barcode generico, QR di
+  /// invito...) si avvisa e si resta sulla foto/OCR.
+  Future<void> _scanQr() async {
+    final raw = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const WineQrScannerScreen()),
+    );
+    if (raw == null || !mounted) return;
+    final data = WineQrCodec.tryDecode(raw);
+    if (data == null) {
+      _snack('Codice non riconosciuto come QR vino: prova con la foto '
+          'dell\'etichetta.');
+      return;
+    }
+    setState(() {
+      _name.text = data.name;
+      if (data.producer.isNotEmpty) _producer.text = data.producer;
+      if (data.vintage != null) _vintage.text = '${data.vintage}';
+      if (data.grape.isNotEmpty) _grape.text = data.grape;
+      if (data.region.isNotEmpty) _region.text = data.region;
+      if (data.denomination.isNotEmpty) _denomination.text = data.denomination;
+      if (data.country.isNotEmpty) _country.text = data.country;
+      if (data.type.isNotEmpty && _wineTypes.contains(data.type)) {
+        _type = data.type;
+      }
+    });
+    _snack('Dati letti dal QR. Controlla e correggi se serve.');
   }
 
   Future<void> _runOcr() async {
